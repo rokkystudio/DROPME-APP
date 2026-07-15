@@ -109,19 +109,24 @@ class WindowsServerScanner {
      * Выполняет HTTP-запрос к одному IP-адресу и проверяет протокольный ответ.
      */
     private fun fetchServer(client: OkHttpClient, host: String): WindowsServer? {
-        val request = Request.Builder()
-            .url("http://$host:$DEFAULT_HTTP_PORT/dropme/info")
-            .get()
-            .build()
-
         return try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return null
+            for (basePath in WindowsServerApi.basePaths) {
+                val request = Request.Builder()
+                    .url(WindowsServerApi.buildUrl(host, DEFAULT_HTTP_PORT, basePath, "/info"))
+                    .get()
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.code == 404) {
+                        continue
+                    }
+                    if (!response.isSuccessful) {
+                        return null
+                    }
+                    val body = response.body?.string().orEmpty()
+                    parseServerInfo(host, body)?.let { return it }
                 }
-                val body = response.body?.string().orEmpty()
-                parseServerInfo(host, body)
             }
+            null
         } catch (throwable: Throwable) {
             val error = throwable.toAppError(AppError.UnknownError())
             if (error is AppError.LocalNetworkBlocked) {
@@ -138,7 +143,7 @@ class WindowsServerScanner {
     private fun parseServerInfo(host: String, body: String): WindowsServer? {
         return runCatching {
             val json = JSONObject(body)
-            if (json.optString("app") != "DROPME") {
+            if (json.optString("app") !in WindowsServerApi.acceptedAppIds) {
                 return null
             }
             if (json.optString("role") != "windows-server") {

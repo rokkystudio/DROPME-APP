@@ -65,47 +65,54 @@ class WindowsControlClient(
             .toString()
             .toRequestBody(JSON_MEDIA_TYPE)
 
-        val request = Request.Builder()
-            .url("http://${server.host}:${server.tcpPort}/dropme/client/connect")
-            .post(requestBody)
-            .build()
-
         val client = buildClient(
             wifiInfo = wifiInfo,
             connectTimeoutMs = CONNECT_TIMEOUT_MS,
             readTimeoutMs = READ_TIMEOUT_MS,
         )
         try {
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw AppError.WindowsRejectedConnection(
-                        "Windows server rejected connection: HTTP ${response.code}",
-                    ).asAppException()
-                }
+            for (basePath in WindowsServerApi.basePaths) {
+                val request = Request.Builder()
+                    .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, "/client/connect"))
+                    .post(requestBody)
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (response.code == 404) {
+                        return@use
+                    }
+                    if (!response.isSuccessful) {
+                        throw AppError.WindowsRejectedConnection(
+                            "Windows server rejected connection: HTTP ${response.code}",
+                        ).asAppException()
+                    }
 
-                val json = JSONObject(body)
-                if (!json.optBoolean("accepted")) {
-                    val reason = json.optString("error").ifBlank { "Windows server rejected connection" }
-                    throw AppError.WindowsRejectedConnection(reason).asAppException()
-                }
+                    val json = JSONObject(body)
+                    if (!json.optBoolean("accepted")) {
+                        val reason = json.optString("error").ifBlank { "Windows server rejected connection" }
+                        throw AppError.WindowsRejectedConnection(reason).asAppException()
+                    }
 
-                val clientId = json.optString("clientId")
-                if (clientId.isBlank()) {
-                    throw AppError.WindowsRejectedConnection("Windows server did not return clientId").asAppException()
-                }
+                    val clientId = json.optString("clientId")
+                    if (clientId.isBlank()) {
+                        throw AppError.WindowsRejectedConnection("Windows server did not return clientId").asAppException()
+                    }
 
-                return ConnectedSession(
-                    clientId = clientId,
-                    driveName = json.optString("driveName").ifBlank { buildDeviceName() },
-                    mountReady = json.optBoolean("mountReady", false),
-                ).also {
-                    Log.d(
-                        LOG_TAG,
-                        "Windows accepted clientId=${it.clientId} driveName=${it.driveName} mountReady=${it.mountReady}",
-                    )
+                    return ConnectedSession(
+                        clientId = clientId,
+                        driveName = json.optString("driveName").ifBlank { buildDeviceName() },
+                        mountReady = json.optBoolean("mountReady", false),
+                    ).also {
+                        Log.d(
+                            LOG_TAG,
+                            "Windows accepted clientId=${it.clientId} driveName=${it.driveName} mountReady=${it.mountReady}",
+                        )
+                    }
                 }
             }
+            throw AppError.WindowsRejectedConnection(
+                "Windows server does not support the expected control connect endpoint",
+            ).asAppException()
         } catch (throwable: Throwable) {
             val error = throwable.toAppError(
                 AppError.WindowsRejectedConnection("Could not register Android device on Windows"),
@@ -131,36 +138,47 @@ class WindowsControlClient(
             connectTimeoutMs = CONNECT_TIMEOUT_MS,
             readTimeoutMs = 0L,
         )
-        val request = Request.Builder()
-            .url("http://${server.host}:${server.tcpPort}/dropme/client/session/$clientId")
-            .get()
-            .build()
-
-        val call = client.newCall(request)
-        activeSessionCall.set(call)
         try {
-            call.execute().use { response ->
-                if (!response.isSuccessful) {
-                    val reason = response.body?.string().orEmpty().ifBlank { "HTTP ${response.code}" }
-                    throw AppError.WindowsRejectedConnection(reason).asAppException()
-                }
+            for (basePath in WindowsServerApi.basePaths) {
+                val request = Request.Builder()
+                    .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, "/client/session/$clientId"))
+                    .get()
+                    .build()
+                val call = client.newCall(request)
+                activeSessionCall.set(call)
+                try {
+                    call.execute().use { response ->
+                        if (response.code == 404) {
+                            return@use
+                        }
+                        if (!response.isSuccessful) {
+                            val reason = response.body?.string().orEmpty().ifBlank { "HTTP ${response.code}" }
+                            throw AppError.WindowsRejectedConnection(reason).asAppException()
+                        }
 
-                val source = response.body?.source()
-                    ?: throw AppError.WindowsRejectedConnection("Windows session stream is empty").asAppException()
-                while (true) {
-                    source.readUtf8Line() ?: break
+                        val source = response.body?.source()
+                            ?: throw AppError.WindowsRejectedConnection("Windows session stream is empty").asAppException()
+                        while (true) {
+                            source.readUtf8Line() ?: break
+                        }
+                        return
+                    }
+                } catch (throwable: Throwable) {
+                    if (call.isCanceled()) {
+                        return
+                    }
+                    val error = throwable.toAppError(
+                        AppError.WindowsRejectedConnection("Windows control session ended unexpectedly"),
+                    )
+                    throw error.asAppException(throwable)
+                } finally {
+                    activeSessionCall.compareAndSet(call, null)
                 }
             }
-        } catch (throwable: Throwable) {
-            if (call.isCanceled()) {
-                return
-            }
-            val error = throwable.toAppError(
-                AppError.WindowsRejectedConnection("Windows control session ended unexpectedly"),
-            )
-            throw error.asAppException(throwable)
+            throw AppError.WindowsRejectedConnection(
+                "Windows server does not support the expected control session endpoint",
+            ).asAppException()
         } finally {
-            activeSessionCall.compareAndSet(call, null)
             client.dispatcher.executorService.shutdown()
             client.connectionPool.evictAll()
         }

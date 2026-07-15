@@ -79,25 +79,34 @@ class WindowsUploadClient(
     ) {
         Log.d(LOG_TAG, "Share upload: ${file.displayName} -> ${server.host}:${server.tcpPort}")
         val encodedName = URLEncoder.encode(file.displayName, StandardCharsets.UTF_8.name())
-        val request = Request.Builder()
-            .url("http://${server.host}:${server.tcpPort}/dropme/upload?name=$encodedName")
-            .put(SharedFileRequestBody(sharedFileReader, file))
-            .build()
-
         try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val reason = response.body?.string().orEmpty().trim()
-                    val message = buildString {
-                        append("Ошибка загрузки файла ${file.displayName}: HTTP ${response.code}")
-                        if (reason.isNotBlank()) {
-                            append(". ")
-                            append(reason)
-                        }
+            for (basePath in WindowsServerApi.basePaths) {
+                val request = Request.Builder()
+                    .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, "/upload?name=$encodedName"))
+                    .put(SharedFileRequestBody(sharedFileReader, file))
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.code == 404) {
+                        return@use
                     }
-                    throw AppError.UploadFailed(file.displayName, message).asAppException()
+                    if (!response.isSuccessful) {
+                        val reason = response.body?.string().orEmpty().trim()
+                        val message = buildString {
+                            append("Ошибка загрузки файла ${file.displayName}: HTTP ${response.code}")
+                            if (reason.isNotBlank()) {
+                                append(". ")
+                                append(reason)
+                            }
+                        }
+                        throw AppError.UploadFailed(file.displayName, message).asAppException()
+                    }
+                    return
                 }
             }
+            throw AppError.UploadFailed(
+                file.displayName,
+                "Ошибка загрузки файла ${file.displayName}: сервер не поддерживает upload endpoint",
+            ).asAppException()
         } catch (throwable: Throwable) {
             val error = throwable.toAppError(
                 AppError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
