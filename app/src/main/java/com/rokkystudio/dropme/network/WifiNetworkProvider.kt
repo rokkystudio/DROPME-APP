@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -10,8 +10,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.concurrent.CountDownLatch
@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Предоставляет сведения о Wi‑Fi сети, через которую выполняются
- * локальные подключения WiFiDrop.
+ * локальные подключения DROPME.
  */
 class WifiNetworkProvider(
     context: Context,
@@ -40,13 +40,13 @@ class WifiNetworkProvider(
      * Возвращает активную Wi‑Fi сеть и IPv4-адрес устройства.
      */
     fun getWifiNetworkInfo(): WifiNetworkInfo {
-        val wifiNetwork = findWifiNetwork() ?: throw WiFiDropError.NoWifiNetwork.asException()
+        val wifiNetwork = findWifiNetwork() ?: throw AppError.NoWifiNetwork.asAppException()
         val linkProperties = connectivityManager.getLinkProperties(wifiNetwork)
-            ?: throw WiFiDropError.NoWifiNetwork.asException()
+            ?: throw AppError.NoWifiNetwork.asAppException()
         val ipv4Address = findIpv4Address(linkProperties)
-            ?: throw WiFiDropError.NoWifiNetwork.asException()
+            ?: throw AppError.NoWifiNetwork.asAppException()
         val prefixLength = findPrefixLength(linkProperties, ipv4Address)
-            ?: throw WiFiDropError.NoWifiNetwork.asException()
+            ?: throw AppError.NoWifiNetwork.asAppException()
         Log.d(LOG_TAG, "Wi-Fi network: ${ipv4Address.hostAddress}/$prefixLength")
         return WifiNetworkInfo(
             network = wifiNetwork,
@@ -163,7 +163,9 @@ class WifiNetworkProvider(
     }
 
     private companion object {
-        const val LOG_TAG = "WiFiDrop"
+        const val LOG_TAG = "DROPME"
         const val WIFI_CALLBACK_TIMEOUT_MS = 750L
     }
 }
+
+

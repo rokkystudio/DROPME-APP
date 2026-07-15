@@ -1,10 +1,10 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 import android.util.Log
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
-import com.rokkystudio.wifidrop.storage.SharedFileReader
-import com.rokkystudio.wifidrop.toWiFiDropError
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
+import com.rokkystudio.dropme.storage.SharedFileReader
+import com.rokkystudio.dropme.toAppError
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,7 +16,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 /**
- * Загружает файлы в Windows WiFiDrop Server через upload endpoint.
+ * Загружает файлы в Windows DROPME Server через upload endpoint.
  */
 class WindowsUploadClient(
     private val sharedFileReader: SharedFileReader,
@@ -50,8 +50,8 @@ class WindowsUploadClient(
                     uploadSingleFile(client, server, file)
                     UploadResult(file = file, isSuccess = true)
                 }.getOrElse { throwable ->
-                    val error = throwable.toWiFiDropError(
-                        WiFiDropError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
+                    val error = throwable.toAppError(
+                        AppError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
                     )
                     UploadResult(
                         file = file,
@@ -80,7 +80,7 @@ class WindowsUploadClient(
         Log.d(LOG_TAG, "Share upload: ${file.displayName} -> ${server.host}:${server.tcpPort}")
         val encodedName = URLEncoder.encode(file.displayName, StandardCharsets.UTF_8.name())
         val request = Request.Builder()
-            .url("http://${server.host}:${server.tcpPort}/wifidrop/upload?name=$encodedName")
+            .url("http://${server.host}:${server.tcpPort}/dropme/upload?name=$encodedName")
             .put(SharedFileRequestBody(sharedFileReader, file))
             .build()
 
@@ -95,14 +95,14 @@ class WindowsUploadClient(
                             append(reason)
                         }
                     }
-                    throw WiFiDropError.UploadFailed(file.displayName, message).asException()
+                    throw AppError.UploadFailed(file.displayName, message).asAppException()
                 }
             }
         } catch (throwable: Throwable) {
-            val error = throwable.toWiFiDropError(
-                WiFiDropError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
+            val error = throwable.toAppError(
+                AppError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
             )
-            throw error.asException(throwable)
+            throw error.asAppException(throwable)
         }
     }
 
@@ -134,10 +134,12 @@ class WindowsUploadClient(
     }
 
     private companion object {
-        const val LOG_TAG = "WiFiDrop"
+        const val LOG_TAG = "DROPME"
         const val CONNECT_TIMEOUT_SECONDS = 10L
         const val READ_TIMEOUT_SECONDS = 60L
         const val WRITE_TIMEOUT_SECONDS = 60L
         val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }
+
+

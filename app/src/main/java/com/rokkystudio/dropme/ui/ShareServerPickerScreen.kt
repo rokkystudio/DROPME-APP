@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.ui
+package com.rokkystudio.dropme.ui
 
 import android.content.Context
 import android.view.LayoutInflater
@@ -8,8 +8,8 @@ import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
-import com.rokkystudio.wifidrop.R
-import com.rokkystudio.wifidrop.network.WindowsServer
+import com.rokkystudio.dropme.R
+import com.rokkystudio.dropme.network.WindowsServer
 
 /**
  * Отображает список найденных Windows-серверов для выбора получателя Share.
@@ -73,3 +73,4 @@ class ShareServerPickerScreen(
             context.getString(R.string.share_server_row_subtitle, server.host, server.tcpPort)
     }
 }
+

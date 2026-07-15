@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">WiFiDrop</string>
-    <string name="main_activity_stage_one_description">Stage 1 handles file sharing from the Android Share menu to Windows WiFiDrop Server over the local Wi-Fi network.</string>
+    <string name="app_name">DROPME</string>
+    <string name="main_activity_stage_one_description">Stage 1 handles file sharing from the Android Share menu to Windows DROPME Server over the local Wi-Fi network.</string>
     <string name="main_status_preparing">Preparing Wi-Fi connection…</string>
-    <string name="main_status_scanning">Searching for WiFiDrop Windows servers…</string>
+    <string name="main_status_scanning">Searching for DROPME Windows servers…</string>
     <string name="main_status_scanning_detail">Scanning local Wi-Fi subnet by IP addresses.</string>
     <string name="main_status_scanning_host">Current IP: %1$s</string>
     <string name="main_status_select_server">Select a Windows server</string>
@@ -17,15 +17,15 @@
     <string name="main_status_error_title">Connection failed</string>
     <string name="main_action_disconnect">Disconnect</string>
     <string name="service_action_disconnect">Disconnect</string>
-    <string name="service_notification_channel_name">WiFiDrop connection</string>
+    <string name="service_notification_channel_name">DROPME connection</string>
     <string name="service_notification_channel_description">Keeps the Android storage connection available for Windows.</string>
-    <string name="service_notification_connecting_title">WiFiDrop is connecting</string>
+    <string name="service_notification_connecting_title">DROPME is connecting</string>
     <string name="service_notification_connecting_text">Connecting to %1$s and starting WebDAV.</string>
-    <string name="service_notification_connected_title">WiFiDrop is active</string>
+    <string name="service_notification_connected_title">DROPME is active</string>
     <string name="service_notification_connected_text">Android storage is connected to %1$s.</string>
     <string name="main_storage_roots_title">Storage roots</string>
     <string name="main_error_no_storage_roots_ready">Grant all files access before connecting to Windows.</string>
-    <string name="main_storage_access_denied">All files access was not granted. WiFiDrop will close.</string>
+    <string name="main_storage_access_denied">All files access was not granted. DROPME will close.</string>
     <string name="main_stats_wifi_ip">Wi-Fi IP: %1$s</string>
     <string name="main_stats_prefix">Prefix: /%1$d</string>
     <string name="main_stats_port">Scan port: %1$d</string>
@@ -48,9 +48,9 @@
     <string name="storage_state_needs_all_files">grant all files access</string>
     <string name="storage_state_needs_tree_grant">grant all files access</string>
     <string name="storage_state_unavailable">storage is unavailable</string>
-    <string name="share_activity_title">WiFiDrop Share</string>
+    <string name="share_activity_title">DROPME Share</string>
     <string name="share_status_preparing">Preparing transfer…</string>
-    <string name="share_status_scanning">Searching for WiFiDrop Windows servers…</string>
+    <string name="share_status_scanning">Searching for DROPME Windows servers…</string>
     <string name="share_status_select_server">Select a Windows server</string>
     <string name="share_status_select_server_detail_single">Tap the device to send files.</string>
     <string name="share_status_select_server_detail_multiple">Tap the device to send files. Found: %1$d.</string>
@@ -60,7 +60,7 @@
     <string name="share_status_completed_success">Transfer completed</string>
     <string name="share_status_completed_partial">Transfer completed with errors</string>
     <string name="share_status_completed_failed">No files were sent</string>
-    <string name="share_error_server_not_found">WiFiDrop server was not found on the local network</string>
+    <string name="share_error_server_not_found">DROPME server was not found on the local network</string>
     <string name="share_error_no_files">No files were found for transfer</string>
     <string name="share_error_empty_name">The file name could not be determined</string>
     <string name="share_error_large_subnet">The Wi-Fi subnet is too large for a fast server scan</string>
@@ -84,3 +84,4 @@
     <string name="share_file_status_success">Sent</string>
     <string name="share_file_status_failed">Failed: %1$s</string>
 </resources>
+

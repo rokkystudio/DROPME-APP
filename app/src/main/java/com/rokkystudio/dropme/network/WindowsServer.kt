@@ -1,7 +1,7 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 /**
- * Описывает найденный Windows WiFiDrop Server.
+ * Описывает найденный Windows DROPME Server.
  */
 data class WindowsServer(
     val host: String,
@@ -10,3 +10,4 @@ data class WindowsServer(
     val deviceName: String,
     val protocolVersion: Int,
 )
+

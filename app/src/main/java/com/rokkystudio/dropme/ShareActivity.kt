@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop
+package com.rokkystudio.dropme
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -13,17 +13,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.rokkystudio.wifidrop.network.WifiDropScanner
-import com.rokkystudio.wifidrop.network.WifiNetworkProvider
-import com.rokkystudio.wifidrop.network.WindowsServer
-import com.rokkystudio.wifidrop.network.WindowsUploadClient
-import com.rokkystudio.wifidrop.storage.SharedFileReader
-import com.rokkystudio.wifidrop.ui.ShareServerPickerScreen
+import com.rokkystudio.dropme.network.WindowsServerScanner
+import com.rokkystudio.dropme.network.WifiNetworkProvider
+import com.rokkystudio.dropme.network.WindowsServer
+import com.rokkystudio.dropme.network.WindowsUploadClient
+import com.rokkystudio.dropme.storage.SharedFileReader
+import com.rokkystudio.dropme.ui.ShareServerPickerScreen
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Принимает Share Intent, ищет Windows-серверы WiFiDrop в локальной Wi‑Fi сети
+ * Принимает Share Intent, ищет Windows-серверы DROPME в локальной Wi‑Fi сети
  * и загружает выбранные файлы в upload endpoint Windows.
  */
 class ShareActivity : AppCompatActivity() {
@@ -52,7 +52,7 @@ class ShareActivity : AppCompatActivity() {
     private lateinit var closeButton: Button
 
     private lateinit var wifiNetworkProvider: WifiNetworkProvider
-    private lateinit var wifiDropScanner: WifiDropScanner
+    private lateinit var wifiDropScanner: WindowsServerScanner
     private lateinit var sharedFileReader: SharedFileReader
     private lateinit var windowsUploadClient: WindowsUploadClient
     private lateinit var serverPickerScreen: ShareServerPickerScreen
@@ -108,7 +108,7 @@ class ShareActivity : AppCompatActivity() {
      */
     private fun bindDependencies() {
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
-        wifiDropScanner = WifiDropScanner()
+        wifiDropScanner = WindowsServerScanner()
         sharedFileReader = SharedFileReader(applicationContext)
         windowsUploadClient = WindowsUploadClient(sharedFileReader)
         serverPickerScreen = ShareServerPickerScreen(
@@ -153,8 +153,8 @@ class ShareActivity : AppCompatActivity() {
                     handleDiscoveredServers(servers)
                 }
             } catch (throwable: Throwable) {
-                val error = throwable.toWiFiDropError(
-                    WiFiDropError.UnknownError(getString(R.string.share_status_error_title)),
+                val error = throwable.toAppError(
+                    AppError.UnknownError(getString(R.string.share_status_error_title)),
                 )
                 runOnUiThread {
                     handleError(error)
@@ -168,7 +168,7 @@ class ShareActivity : AppCompatActivity() {
      */
     private fun handleDiscoveredServers(servers: List<WindowsServer>) {
         if (servers.isEmpty()) {
-            handleError(WiFiDropError.ServerNotFound)
+            handleError(AppError.ServerNotFound)
             return
         }
 
@@ -192,7 +192,7 @@ class ShareActivity : AppCompatActivity() {
     private fun uploadToServer(server: WindowsServer) {
         val wifiInfo = lastWifiInfo
         if (wifiInfo == null) {
-            handleError(WiFiDropError.NoWifiNetwork)
+            handleError(AppError.NoWifiNetwork)
             return
         }
 
@@ -208,8 +208,8 @@ class ShareActivity : AppCompatActivity() {
                     showUploadResults(server, results)
                 }
             } catch (throwable: Throwable) {
-                val error = throwable.toWiFiDropError(
-                    WiFiDropError.UploadFailed(reason = getString(R.string.share_status_error_title)),
+                val error = throwable.toAppError(
+                    AppError.UploadFailed(reason = getString(R.string.share_status_error_title)),
                 )
                 val failedResults = sharedFiles.map { file ->
                     WindowsUploadClient.UploadResult(
@@ -228,14 +228,14 @@ class ShareActivity : AppCompatActivity() {
     /**
      * Отображает ошибку в соответствии с правилами Share MVP.
      */
-    private fun handleError(error: WiFiDropError) {
+    private fun handleError(error: AppError) {
         when (error) {
-            WiFiDropError.NoWifiNetwork -> {
+            AppError.NoWifiNetwork -> {
                 Toast.makeText(this, getString(R.string.share_error_wifi_only), Toast.LENGTH_LONG).show()
                 finish()
             }
 
-            WiFiDropError.LocalNetworkBlocked -> {
+            AppError.LocalNetworkBlocked -> {
                 Toast.makeText(this, getString(R.string.share_error_local_network_blocked), Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -246,7 +246,7 @@ class ShareActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
                 serverListTitle.visibility = View.GONE
                 serverListContainer.visibility = View.GONE
-                retryButton.visibility = if (error == WiFiDropError.ServerNotFound) View.VISIBLE else View.GONE
+                retryButton.visibility = if (error == AppError.ServerNotFound) View.VISIBLE else View.GONE
                 closeButton.visibility = View.VISIBLE
             }
         }
@@ -368,3 +368,5 @@ class ShareActivity : AppCompatActivity() {
         const val RESULT_CLOSE_DELAY_MS = 1_000L
     }
 }
+
+

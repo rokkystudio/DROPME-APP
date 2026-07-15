@@ -3,13 +3,13 @@ plugins {
 }
 
 android {
-    namespace = "com.rokkystudio.wifidrop"
+    namespace = "com.rokkystudio.dropme"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.rokkystudio.wifidrop"
+        applicationId = "com.rokkystudio.dropme"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -38,3 +38,4 @@ dependencies {
     implementation(libs.material)
     implementation(libs.okhttp)
 }
+

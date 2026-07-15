@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop
+package com.rokkystudio.dropme
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -16,18 +16,18 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.rokkystudio.wifidrop.network.WifiDropScanner
-import com.rokkystudio.wifidrop.network.WifiNetworkProvider
-import com.rokkystudio.wifidrop.network.WindowsServer
-import com.rokkystudio.wifidrop.storage.StorageAccessState
-import com.rokkystudio.wifidrop.storage.StorageRootEntry
-import com.rokkystudio.wifidrop.storage.StorageRootsRepository
-import com.rokkystudio.wifidrop.service.AndroidConnectionService
-import com.rokkystudio.wifidrop.service.ConnectionServicePhase
-import com.rokkystudio.wifidrop.service.ConnectionServiceSnapshot
-import com.rokkystudio.wifidrop.service.ConnectionServiceStateStore
-import com.rokkystudio.wifidrop.ui.ShareServerPickerScreen
-import com.rokkystudio.wifidrop.ui.StorageRootsScreen
+import com.rokkystudio.dropme.network.WindowsServerScanner
+import com.rokkystudio.dropme.network.WifiNetworkProvider
+import com.rokkystudio.dropme.network.WindowsServer
+import com.rokkystudio.dropme.storage.StorageAccessState
+import com.rokkystudio.dropme.storage.StorageRootEntry
+import com.rokkystudio.dropme.storage.StorageRootsRepository
+import com.rokkystudio.dropme.service.AndroidConnectionService
+import com.rokkystudio.dropme.service.ConnectionServicePhase
+import com.rokkystudio.dropme.service.ConnectionServiceSnapshot
+import com.rokkystudio.dropme.service.ConnectionServiceStateStore
+import com.rokkystudio.dropme.ui.ShareServerPickerScreen
+import com.rokkystudio.dropme.ui.StorageRootsScreen
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var disconnectButton: android.widget.Button
 
     private lateinit var wifiNetworkProvider: WifiNetworkProvider
-    private lateinit var wifiDropScanner: WifiDropScanner
+    private lateinit var wifiDropScanner: WindowsServerScanner
     private lateinit var storageRootsRepository: StorageRootsRepository
     private lateinit var connectionStateStore: ConnectionServiceStateStore
     private lateinit var serverPickerScreen: ShareServerPickerScreen
@@ -131,7 +131,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindDependencies() {
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
-        wifiDropScanner = WifiDropScanner()
+        wifiDropScanner = WindowsServerScanner()
         storageRootsRepository = StorageRootsRepository(applicationContext)
         connectionStateStore = ConnectionServiceStateStore(applicationContext)
         serverPickerScreen = ShareServerPickerScreen(
@@ -250,8 +250,8 @@ class MainActivity : AppCompatActivity() {
                     handleDiscoveredServers(wifiInfo, servers)
                 }
             } catch (throwable: Throwable) {
-                val error = throwable.toWiFiDropError(
-                    WiFiDropError.UnknownError(getString(R.string.main_status_error_title)),
+                val error = throwable.toAppError(
+                    AppError.UnknownError(getString(R.string.main_status_error_title)),
                 )
                 runOnUiThread {
                     if (generation != scanGeneration) {
@@ -265,7 +265,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderScanningState(
         wifiInfo: WifiNetworkProvider.WifiNetworkInfo,
-        progress: WifiDropScanner.ScanProgress,
+        progress: WindowsServerScanner.ScanProgress,
         servers: List<WindowsServer>,
     ) {
         statusText.text = getString(R.string.main_status_scanning)
@@ -291,7 +291,7 @@ class MainActivity : AppCompatActivity() {
         servers: List<WindowsServer>,
     ) {
         if (servers.isEmpty()) {
-            handleError(WiFiDropError.ServerNotFound)
+            handleError(AppError.ServerNotFound)
             return
         }
 
@@ -315,12 +315,12 @@ class MainActivity : AppCompatActivity() {
     private fun connectToServer(server: WindowsServer) {
         val wifiInfo = lastWifiInfo
         if (wifiInfo == null) {
-            handleError(WiFiDropError.NoWifiNetwork)
+            handleError(AppError.NoWifiNetwork)
             return
         }
         val publishedRoots = storageRootsRepository.listPublishedRoots()
         if (publishedRoots.isEmpty()) {
-            handleError(WiFiDropError.UnsupportedStorageOperation(getString(R.string.main_error_no_storage_roots_ready)))
+            handleError(AppError.UnsupportedStorageOperation(getString(R.string.main_error_no_storage_roots_ready)))
             return
         }
 
@@ -371,7 +371,7 @@ class MainActivity : AppCompatActivity() {
 
             ConnectionServicePhase.ERROR -> {
                 handleError(
-                    WiFiDropError.WindowsRejectedConnection(
+                    AppError.WindowsRejectedConnection(
                         snapshot.errorMessage ?: getString(R.string.main_status_error_title),
                     ),
                 )
@@ -379,7 +379,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleError(error: WiFiDropError) {
+    private fun handleError(error: AppError) {
         statusText.text = getString(R.string.main_status_error_title)
         statsText.text = buildErrorStats()
         detailText.text = error.toUserMessage(this)
@@ -491,7 +491,7 @@ class MainActivity : AppCompatActivity() {
 
             StorageAccessState.UNAVAILABLE -> {
                 handleError(
-                    WiFiDropError.UnsupportedStorageOperation(getString(R.string.storage_state_unavailable)),
+                    AppError.UnsupportedStorageOperation(getString(R.string.storage_state_unavailable)),
                 )
             }
         }
@@ -530,3 +530,5 @@ class MainActivity : AppCompatActivity() {
         connectionReceiverRegistered = true
     }
 }
+
+

@@ -1,12 +1,12 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
-import com.rokkystudio.wifidrop.toWiFiDropError
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
+import com.rokkystudio.dropme.toAppError
 import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -66,7 +66,7 @@ class WindowsControlClient(
             .toRequestBody(JSON_MEDIA_TYPE)
 
         val request = Request.Builder()
-            .url("http://${server.host}:${server.tcpPort}/wifidrop/client/connect")
+            .url("http://${server.host}:${server.tcpPort}/dropme/client/connect")
             .post(requestBody)
             .build()
 
@@ -79,20 +79,20 @@ class WindowsControlClient(
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    throw WiFiDropError.WindowsRejectedConnection(
+                    throw AppError.WindowsRejectedConnection(
                         "Windows server rejected connection: HTTP ${response.code}",
-                    ).asException()
+                    ).asAppException()
                 }
 
                 val json = JSONObject(body)
                 if (!json.optBoolean("accepted")) {
                     val reason = json.optString("error").ifBlank { "Windows server rejected connection" }
-                    throw WiFiDropError.WindowsRejectedConnection(reason).asException()
+                    throw AppError.WindowsRejectedConnection(reason).asAppException()
                 }
 
                 val clientId = json.optString("clientId")
                 if (clientId.isBlank()) {
-                    throw WiFiDropError.WindowsRejectedConnection("Windows server did not return clientId").asException()
+                    throw AppError.WindowsRejectedConnection("Windows server did not return clientId").asAppException()
                 }
 
                 return ConnectedSession(
@@ -107,10 +107,10 @@ class WindowsControlClient(
                 }
             }
         } catch (throwable: Throwable) {
-            val error = throwable.toWiFiDropError(
-                WiFiDropError.WindowsRejectedConnection("Could not register Android device on Windows"),
+            val error = throwable.toAppError(
+                AppError.WindowsRejectedConnection("Could not register Android device on Windows"),
             )
-            throw error.asException(throwable)
+            throw error.asAppException(throwable)
         } finally {
             client.dispatcher.executorService.shutdown()
             client.connectionPool.evictAll()
@@ -132,7 +132,7 @@ class WindowsControlClient(
             readTimeoutMs = 0L,
         )
         val request = Request.Builder()
-            .url("http://${server.host}:${server.tcpPort}/wifidrop/client/session/$clientId")
+            .url("http://${server.host}:${server.tcpPort}/dropme/client/session/$clientId")
             .get()
             .build()
 
@@ -142,11 +142,11 @@ class WindowsControlClient(
             call.execute().use { response ->
                 if (!response.isSuccessful) {
                     val reason = response.body?.string().orEmpty().ifBlank { "HTTP ${response.code}" }
-                    throw WiFiDropError.WindowsRejectedConnection(reason).asException()
+                    throw AppError.WindowsRejectedConnection(reason).asAppException()
                 }
 
                 val source = response.body?.source()
-                    ?: throw WiFiDropError.WindowsRejectedConnection("Windows session stream is empty").asException()
+                    ?: throw AppError.WindowsRejectedConnection("Windows session stream is empty").asAppException()
                 while (true) {
                     source.readUtf8Line() ?: break
                 }
@@ -155,10 +155,10 @@ class WindowsControlClient(
             if (call.isCanceled()) {
                 return
             }
-            val error = throwable.toWiFiDropError(
-                WiFiDropError.WindowsRejectedConnection("Windows control session ended unexpectedly"),
+            val error = throwable.toAppError(
+                AppError.WindowsRejectedConnection("Windows control session ended unexpectedly"),
             )
-            throw error.asException(throwable)
+            throw error.asAppException(throwable)
         } finally {
             activeSessionCall.compareAndSet(call, null)
             client.dispatcher.executorService.shutdown()
@@ -215,6 +215,8 @@ class WindowsControlClient(
         const val PROTOCOL_VERSION = 1
         const val CONNECT_TIMEOUT_MS = 3_000L
         const val READ_TIMEOUT_MS = 3_000L
-        const val LOG_TAG = "WiFiDrop"
+        const val LOG_TAG = "DROPME"
     }
 }
+
+

@@ -1,42 +1,42 @@
-package com.rokkystudio.wifidrop
+package com.rokkystudio.dropme
 
 import android.content.Context
 import java.io.IOException
 
 /**
- * Описывает ошибки сценариев WiFiDrop, которые показываются пользователю.
+ * Описывает ошибки сценариев DROPME, которые показываются пользователю.
  */
-sealed class WiFiDropError {
-    data object NoWifiNetwork : WiFiDropError()
+sealed class AppError {
+    data object NoWifiNetwork : AppError()
 
-    data object LocalNetworkBlocked : WiFiDropError()
+    data object LocalNetworkBlocked : AppError()
 
-    data object ServerNotFound : WiFiDropError()
+    data object ServerNotFound : AppError()
 
-    data object MultipleServersNeedSelection : WiFiDropError()
+    data object MultipleServersNeedSelection : AppError()
 
     data class UploadFailed(
         val fileName: String? = null,
         val reason: String? = null,
-    ) : WiFiDropError()
+    ) : AppError()
 
     data class WebDavStartFailed(
         val reason: String? = null,
-    ) : WiFiDropError()
+    ) : AppError()
 
-    data object StoragePermissionMissing : WiFiDropError()
+    data object StoragePermissionMissing : AppError()
 
     data class UnsupportedStorageOperation(
         val reason: String? = null,
-    ) : WiFiDropError()
+    ) : AppError()
 
     data class WindowsRejectedConnection(
         val reason: String? = null,
-    ) : WiFiDropError()
+    ) : AppError()
 
     data class UnknownError(
         val reason: String? = null,
-    ) : WiFiDropError()
+    ) : AppError()
 
     /**
      * Возвращает текст ошибки для отображения в UI.
@@ -58,37 +58,37 @@ sealed class WiFiDropError {
 }
 
 /**
- * Переносит типизированную ошибку WiFiDrop через исключения.
+ * Переносит типизированную ошибку DROPME через исключения.
  */
-class WiFiDropException(
-    val error: WiFiDropError,
+class AppException(
+    val error: AppError,
     cause: Throwable? = null,
 ) : IOException(error.toString(), cause)
 
 /**
- * Создаёт исключение из ошибки WiFiDrop.
+ * Создаёт исключение из ошибки DROPME.
  */
-fun WiFiDropError.asException(cause: Throwable? = null): WiFiDropException {
-    return WiFiDropException(this, cause)
+fun AppError.asAppException(cause: Throwable? = null): AppException {
+    return AppException(this, cause)
 }
 
 /**
- * Ищет типизированную ошибку WiFiDrop в цепочке причин.
+ * Ищет типизированную ошибку DROPME в цепочке причин.
  */
-fun Throwable.findWiFiDropError(): WiFiDropError? {
-    if (this is WiFiDropException) {
+fun Throwable.findAppError(): AppError? {
+    if (this is AppException) {
         return error
     }
-    return cause?.findWiFiDropError()
+    return cause?.findAppError()
 }
 
 /**
- * Преобразует системную ошибку в пользовательскую ошибку WiFiDrop.
+ * Преобразует системную ошибку в пользовательскую ошибку DROPME.
  */
-fun Throwable.toWiFiDropError(default: WiFiDropError): WiFiDropError {
-    return findWiFiDropError()
+fun Throwable.toAppError(default: AppError): AppError {
+    return findAppError()
         ?: if (isLocalNetworkBlockedFailure()) {
-            WiFiDropError.LocalNetworkBlocked
+            AppError.LocalNetworkBlocked
         } else {
             default
         }
@@ -115,3 +115,5 @@ fun Throwable.isLocalNetworkBlockedFailure(): Boolean {
         "operation not permitted" in messageText ||
         "socket access denied" in messageText
 }
+
+

@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.storage
+package com.rokkystudio.dropme.storage
 
 import android.content.ContentResolver
 import android.content.Context
@@ -6,8 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
 import java.io.InputStream
 
 /**
@@ -38,7 +38,7 @@ class SharedFileReader(
             else -> emptyList()
         }
         if (uris.isEmpty()) {
-            throw WiFiDropError.UploadFailed(reason = "Файлы для передачи не найдены").asException()
+            throw AppError.UploadFailed(reason = "Файлы для передачи не найдены").asAppException()
         }
 
         return uris.map { uri -> readSharedFile(uri) }
@@ -49,7 +49,7 @@ class SharedFileReader(
      */
     fun openInputStream(file: SharedFile): InputStream {
         return contentResolver.openInputStream(file.uri)
-            ?: throw WiFiDropError.StoragePermissionMissing.asException()
+            ?: throw AppError.StoragePermissionMissing.asAppException()
     }
 
     /**
@@ -67,7 +67,7 @@ class SharedFileReader(
                 val name = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)).orEmpty().trim()
                 if (name.isBlank()) {
                     Log.e(LOG_TAG, "Пустое имя файла для URI: $uri")
-                    throw WiFiDropError.UploadFailed(reason = "Не удалось определить имя файла для передачи").asException()
+                    throw AppError.UploadFailed(reason = "Не удалось определить имя файла для передачи").asAppException()
                 }
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
                 val size = if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else null
@@ -76,7 +76,7 @@ class SharedFileReader(
         }
 
         Log.e(LOG_TAG, "Не удалось прочитать URI: $uri")
-        throw WiFiDropError.UploadFailed(reason = "Не удалось прочитать файл через ContentResolver").asException()
+        throw AppError.UploadFailed(reason = "Не удалось прочитать файл через ContentResolver").asAppException()
     }
 
     /**
@@ -105,6 +105,8 @@ class SharedFileReader(
     }
 
     private companion object {
-        const val LOG_TAG = "WiFiDrop"
+        const val LOG_TAG = "DROPME"
     }
 }
+
+

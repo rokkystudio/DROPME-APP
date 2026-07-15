@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.service
+package com.rokkystudio.dropme.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -12,16 +12,16 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.rokkystudio.wifidrop.MainActivity
-import com.rokkystudio.wifidrop.R
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
-import com.rokkystudio.wifidrop.network.AndroidWebDavServer
-import com.rokkystudio.wifidrop.network.WifiNetworkProvider
-import com.rokkystudio.wifidrop.network.WindowsControlClient
-import com.rokkystudio.wifidrop.network.WindowsServer
-import com.rokkystudio.wifidrop.storage.StorageRootsRepository
-import com.rokkystudio.wifidrop.toWiFiDropError
+import com.rokkystudio.dropme.MainActivity
+import com.rokkystudio.dropme.R
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
+import com.rokkystudio.dropme.network.AndroidWebDavServer
+import com.rokkystudio.dropme.network.WifiNetworkProvider
+import com.rokkystudio.dropme.network.WindowsControlClient
+import com.rokkystudio.dropme.network.WindowsServer
+import com.rokkystudio.dropme.storage.StorageRootsRepository
+import com.rokkystudio.dropme.toAppError
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -106,9 +106,9 @@ class AndroidConnectionService : Service() {
 
             val publishedRoots = storageRootsRepository.listPublishedRoots()
             if (publishedRoots.isEmpty()) {
-                throw WiFiDropError.UnsupportedStorageOperation(
+                throw AppError.UnsupportedStorageOperation(
                     getString(R.string.main_error_no_storage_roots_ready),
-                ).asException()
+                ).asAppException()
             }
 
             val runningWebDav = webDavServer.start(
@@ -184,8 +184,8 @@ class AndroidConnectionService : Service() {
                 return
             }
 
-            val error = throwable.toWiFiDropError(
-                WiFiDropError.WindowsRejectedConnection(getString(R.string.main_status_error_title)),
+            val error = throwable.toAppError(
+                AppError.WindowsRejectedConnection(getString(R.string.main_status_error_title)),
             )
             finishWithSnapshot(
                 ConnectionServiceSnapshot(
@@ -347,14 +347,14 @@ class AndroidConnectionService : Service() {
     }
 
     companion object {
-        const val ACTION_STATE_CHANGED = "com.rokkystudio.wifidrop.ACTION_CONNECTION_STATE_CHANGED"
+        const val ACTION_STATE_CHANGED = "com.rokkystudio.dropme.ACTION_CONNECTION_STATE_CHANGED"
 
-        private const val ACTION_START = "com.rokkystudio.wifidrop.action.START_CONNECTION"
-        private const val ACTION_STOP = "com.rokkystudio.wifidrop.action.STOP_CONNECTION"
+        private const val ACTION_START = "com.rokkystudio.dropme.action.START_CONNECTION"
+        private const val ACTION_STOP = "com.rokkystudio.dropme.action.STOP_CONNECTION"
         private const val EXTRA_SERVER_HOST = "server_host"
         private const val EXTRA_SERVER_PORT = "server_port"
         private const val EXTRA_SERVER_NAME = "server_name"
-        private const val NOTIFICATION_CHANNEL_ID = "wifidrop_connection"
+        private const val NOTIFICATION_CHANNEL_ID = "dropme_connection"
         private const val NOTIFICATION_ID = 4201
         private const val REQUEST_OPEN_APP = 4202
         private const val REQUEST_DISCONNECT = 4203
@@ -378,3 +378,5 @@ class AndroidConnectionService : Service() {
         }
     }
 }
+
+

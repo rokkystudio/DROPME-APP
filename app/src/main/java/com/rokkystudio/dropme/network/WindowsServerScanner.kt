@@ -1,9 +1,9 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 import android.util.Log
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
-import com.rokkystudio.wifidrop.toWiFiDropError
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
+import com.rokkystudio.dropme.toAppError
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -15,9 +15,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Выполняет HTTP-поиск Windows WiFiDrop Server в Wi‑Fi подсети устройства.
+ * Выполняет HTTP-поиск Windows DROPME Server в Wi‑Fi подсети устройства.
  */
-class WifiDropScanner {
+class WindowsServerScanner {
     /**
      * Сообщает о прогрессе IP-сканирования подсети.
      */
@@ -39,7 +39,7 @@ class WifiDropScanner {
     ): List<WindowsServer> {
         val candidateHosts = buildCandidateHosts(wifiInfo.ipv4Address, wifiInfo.prefixLength)
         if (candidateHosts.size > MAX_SCAN_HOSTS) {
-            throw WiFiDropError.UnknownError("Подсеть Wi‑Fi слишком большая для быстрого поиска сервера").asException()
+            throw AppError.UnknownError("Подсеть Wi‑Fi слишком большая для быстрого поиска сервера").asAppException()
         }
 
         Log.d(LOG_TAG, "Старт scan по ${candidateHosts.size} адресам")
@@ -88,9 +88,9 @@ class WifiDropScanner {
                 }
             }
         } catch (throwable: Throwable) {
-            throw throwable.toWiFiDropError(
-                WiFiDropError.UnknownError("Не удалось завершить поиск серверов WiFiDrop"),
-            ).asException(throwable)
+            throw throwable.toAppError(
+                AppError.UnknownError("Не удалось завершить поиск серверов DROPME"),
+            ).asAppException(throwable)
         } finally {
             executor.shutdownNow()
             client.dispatcher.executorService.shutdown()
@@ -110,7 +110,7 @@ class WifiDropScanner {
      */
     private fun fetchServer(client: OkHttpClient, host: String): WindowsServer? {
         val request = Request.Builder()
-            .url("http://$host:$DEFAULT_HTTP_PORT/wifidrop/info")
+            .url("http://$host:$DEFAULT_HTTP_PORT/dropme/info")
             .get()
             .build()
 
@@ -123,9 +123,9 @@ class WifiDropScanner {
                 parseServerInfo(host, body)
             }
         } catch (throwable: Throwable) {
-            val error = throwable.toWiFiDropError(WiFiDropError.UnknownError())
-            if (error is WiFiDropError.LocalNetworkBlocked) {
-                throw error.asException(throwable)
+            val error = throwable.toAppError(AppError.UnknownError())
+            if (error is AppError.LocalNetworkBlocked) {
+                throw error.asAppException(throwable)
             }
             Log.d(LOG_TAG, "HTTP scan request failed for $host:$DEFAULT_HTTP_PORT", throwable)
             null
@@ -138,7 +138,7 @@ class WifiDropScanner {
     private fun parseServerInfo(host: String, body: String): WindowsServer? {
         return runCatching {
             val json = JSONObject(body)
-            if (json.optString("app") != "WiFiDrop") {
+            if (json.optString("app") != "DROPME") {
                 return null
             }
             if (json.optString("role") != "windows-server") {
@@ -164,7 +164,7 @@ class WifiDropScanner {
      */
     private fun buildCandidateHosts(address: Inet4Address, prefixLength: Int): List<String> {
         if (prefixLength !in 1..30) {
-            throw WiFiDropError.UnknownError("Не удалось определить подсеть Wi‑Fi для поиска серверов").asException()
+            throw AppError.UnknownError("Не удалось определить подсеть Wi‑Fi для поиска серверов").asAppException()
         }
 
         val ipValue = address.toUnsignedLong()
@@ -208,7 +208,7 @@ class WifiDropScanner {
     }
 
     private companion object {
-        const val LOG_TAG = "WiFiDrop"
+        const val LOG_TAG = "DROPME"
         const val DEFAULT_HTTP_PORT = 49231
         const val CONNECT_TIMEOUT_MS = 300L
         const val READ_TIMEOUT_MS = 500L
@@ -217,3 +217,5 @@ class WifiDropScanner {
         const val IPV4_MASK = 0xFFFFFFFFL
     }
 }
+
+

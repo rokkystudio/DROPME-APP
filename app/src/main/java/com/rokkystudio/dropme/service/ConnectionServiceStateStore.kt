@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.service
+package com.rokkystudio.dropme.service
 
 import android.content.Context
 
@@ -63,7 +63,7 @@ class ConnectionServiceStateStore(
     }
 
     private companion object {
-        const val PREFERENCES_NAME = "wifidrop_connection_service_state"
+        const val PREFERENCES_NAME = "dropme_connection_service_state"
         const val KEY_PHASE = "phase"
         const val KEY_SERVER_NAME = "server_name"
         const val KEY_SERVER_HOST = "server_host"
@@ -76,3 +76,4 @@ class ConnectionServiceStateStore(
         const val ROOT_SEPARATOR = "\u001F"
     }
 }
+

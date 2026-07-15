@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.storage
+package com.rokkystudio.dropme.storage
 
 import android.content.Context
 import android.content.Intent
@@ -8,7 +8,7 @@ import android.os.Environment
 import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
 import android.provider.Settings
-import com.rokkystudio.wifidrop.R
+import com.rokkystudio.dropme.R
 import java.io.File
 import java.util.Locale
 
@@ -206,3 +206,4 @@ class StorageRootsRepository(
         }
     }
 }
+

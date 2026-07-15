@@ -1,14 +1,14 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
-import com.rokkystudio.wifidrop.WiFiDropError
-import com.rokkystudio.wifidrop.asException
-import com.rokkystudio.wifidrop.storage.PublishedStorageRoot
-import com.rokkystudio.wifidrop.storage.StorageBackendType
+import com.rokkystudio.dropme.AppError
+import com.rokkystudio.dropme.asAppException
+import com.rokkystudio.dropme.storage.PublishedStorageRoot
+import com.rokkystudio.dropme.storage.StorageBackendType
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.Closeable
@@ -64,14 +64,14 @@ class AndroidWebDavServer(
         stop()
 
         if (roots.isEmpty()) {
-            throw WiFiDropError.WebDavStartFailed("No published storage roots are available").asException()
+            throw AppError.WebDavStartFailed("No published storage roots are available").asAppException()
         }
 
         val hostAddress = wifiInfo.ipv4Address.hostAddress
-            ?: throw WiFiDropError.WebDavStartFailed("Wi-Fi IP address is missing").asException()
+            ?: throw AppError.WebDavStartFailed("Wi-Fi IP address is missing").asAppException()
         val resolvedRoots = resolvePublishedRoots(roots)
         if (resolvedRoots.isEmpty()) {
-            throw WiFiDropError.WebDavStartFailed("Storage roots could not be resolved").asException()
+            throw AppError.WebDavStartFailed("Storage roots could not be resolved").asAppException()
         }
 
         val socket = ServerSocket()
@@ -80,7 +80,7 @@ class AndroidWebDavServer(
             socket.bind(InetSocketAddress(wifiInfo.ipv4Address as Inet4Address, 0))
         } catch (throwable: Throwable) {
             socket.close()
-            throw WiFiDropError.WebDavStartFailed("Could not bind Android WebDAV server").asException(throwable)
+            throw AppError.WebDavStartFailed("Could not bind Android WebDAV server").asAppException(throwable)
         }
 
         publishedRoots = resolvedRoots
@@ -89,7 +89,7 @@ class AndroidWebDavServer(
         running.set(true)
         acceptThread = Thread(
             { acceptLoop() },
-            "WiFiDrop-WebDavAccept",
+            "DROPME-WebDavAccept",
         ).also { it.start() }
 
         val rootNames = resolvedRoots.map { it.displayName }
@@ -1128,7 +1128,7 @@ class AndroidWebDavServer(
         val headerBuilder = StringBuilder()
         headerBuilder.append("HTTP/1.1 ").append(statusCode).append(' ').append(reason).append("\r\n")
         headerBuilder.append("Date: ").append(formatRfc1123(System.currentTimeMillis())).append("\r\n")
-        headerBuilder.append("Server: WiFiDrop-WebDAV/1.0\r\n")
+        headerBuilder.append("Server: DROPME-WebDAV/1.0\r\n")
         headers.forEach { (key, value) ->
             headerBuilder.append(key).append(": ").append(value).append("\r\n")
         }
@@ -1275,9 +1275,11 @@ class AndroidWebDavServer(
     }
 
     private companion object {
-        const val LOG_TAG = "WiFiDrop"
+        const val LOG_TAG = "DROPME"
         const val SOCKET_TIMEOUT_MS = 10_000
-        const val API_META_PATH = "/.wifidropfs/meta"
-        const val API_LIST_PATH = "/.wifidropfs/list"
+        const val API_META_PATH = "/.dropmefs/meta"
+        const val API_LIST_PATH = "/.dropmefs/list"
     }
 }
+
+

@@ -1,4 +1,4 @@
-package com.rokkystudio.wifidrop.network
+package com.rokkystudio.dropme.network
 
 import android.net.Network
 import java.net.InetAddress
@@ -42,3 +42,4 @@ class WifiBoundSocketFactory(
         return delegate.createSocket(host, port, localAddress, localPort)
     }
 }
+
