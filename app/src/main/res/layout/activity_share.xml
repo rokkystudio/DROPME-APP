@@ -13,34 +13,72 @@
         android:text="@string/share_activity_title"
         android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall" />
 
-    <TextView
-        android:id="@+id/shareStatusText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
-
-    <TextView
-        android:id="@+id/shareDetailText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
-
-    <ProgressBar
-        android:id="@+id/shareProgressBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp" />
-
-    <ListView
-        android:id="@+id/serverListView"
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="16dp"
         android:layout_weight="1"
-        android:dividerHeight="1dp"
-        android:visibility="gone" />
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/shareStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+
+            <TextView
+                android:id="@+id/shareDetailText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+
+            <ProgressBar
+                android:id="@+id/shareProgressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:id="@+id/shareServerListTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/share_section_devices"
+                android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/shareServerListContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/shareFileListTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/share_section_files"
+                android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/shareFileListContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical"
+                android:visibility="gone" />
+        </LinearLayout>
+    </ScrollView>
 
     <Button
         android:id="@+id/retryButton"

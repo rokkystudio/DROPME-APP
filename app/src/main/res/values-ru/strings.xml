@@ -52,8 +52,14 @@
     <string name="share_status_preparing">Подготовка передачи…</string>
     <string name="share_status_scanning">Поиск Windows-серверов WiFiDrop…</string>
     <string name="share_status_select_server">Выберите Windows-сервер</string>
+    <string name="share_status_select_server_detail_single">Нажмите на устройство, чтобы отправить файлы.</string>
+    <string name="share_status_select_server_detail_multiple">Нажмите на устройство, чтобы отправить файлы. Найдено: %1$d.</string>
     <string name="share_status_uploading">Отправка файлов на %1$s…</string>
+    <string name="share_status_uploading_detail">%1$s:%2$d</string>
     <string name="share_status_error_title">Передача не выполнена</string>
+    <string name="share_status_completed_success">Передача завершена</string>
+    <string name="share_status_completed_partial">Передача завершена с ошибками</string>
+    <string name="share_status_completed_failed">Не удалось отправить ни один файл</string>
     <string name="share_error_server_not_found">Сервер WiFiDrop не найден в локальной сети</string>
     <string name="share_error_no_files">Файлы для передачи не найдены</string>
     <string name="share_error_empty_name">Не удалось определить имя файла</string>
@@ -64,6 +70,17 @@
     <string name="share_action_close">Закрыть</string>
     <string name="share_result_single">Файл отправлен</string>
     <string name="share_result_multiple">Отправлено файлов: %1$d</string>
+    <string name="share_result_all_success">Все файлы отправлены</string>
+    <string name="share_result_partial">Отправлено: %1$d, ошибок: %2$d</string>
+    <string name="share_result_all_failed">Не удалось отправить файлы</string>
+    <string name="share_result_summary_success">Отправлено на %1$s</string>
+    <string name="share_result_summary_partial">Отправлено на %1$s. Ошибок: %2$d.</string>
+    <string name="share_result_summary_failed">Не удалось отправить на %1$s.</string>
+    <string name="share_section_devices">Устройства</string>
+    <string name="share_section_files">Файлы</string>
     <string name="share_server_row_title">%1$s</string>
     <string name="share_server_row_subtitle">%1$s:%2$d</string>
+    <string name="share_file_status_pending">Ожидает отправки</string>
+    <string name="share_file_status_success">Отправлен</string>
+    <string name="share_file_status_failed">Ошибка: %1$s</string>
 </resources>

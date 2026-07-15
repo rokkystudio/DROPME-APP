@@ -52,8 +52,14 @@
     <string name="share_status_preparing">Preparing transfer…</string>
     <string name="share_status_scanning">Searching for WiFiDrop Windows servers…</string>
     <string name="share_status_select_server">Select a Windows server</string>
+    <string name="share_status_select_server_detail_single">Tap the device to send files.</string>
+    <string name="share_status_select_server_detail_multiple">Tap the device to send files. Found: %1$d.</string>
     <string name="share_status_uploading">Uploading files to %1$s…</string>
+    <string name="share_status_uploading_detail">%1$s:%2$d</string>
     <string name="share_status_error_title">Transfer failed</string>
+    <string name="share_status_completed_success">Transfer completed</string>
+    <string name="share_status_completed_partial">Transfer completed with errors</string>
+    <string name="share_status_completed_failed">No files were sent</string>
     <string name="share_error_server_not_found">WiFiDrop server was not found on the local network</string>
     <string name="share_error_no_files">No files were found for transfer</string>
     <string name="share_error_empty_name">The file name could not be determined</string>
@@ -64,6 +70,17 @@
     <string name="share_action_close">Close</string>
     <string name="share_result_single">File sent</string>
     <string name="share_result_multiple">Files sent: %1$d</string>
+    <string name="share_result_all_success">All files were sent</string>
+    <string name="share_result_partial">Sent: %1$d, failed: %2$d</string>
+    <string name="share_result_all_failed">Failed to send files</string>
+    <string name="share_result_summary_success">Sent to %1$s</string>
+    <string name="share_result_summary_partial">Sent to %1$s. Failed: %2$d.</string>
+    <string name="share_result_summary_failed">Could not send to %1$s.</string>
+    <string name="share_section_devices">Devices</string>
+    <string name="share_section_files">Files</string>
     <string name="share_server_row_title">%1$s</string>
     <string name="share_server_row_subtitle">%1$s:%2$d</string>
+    <string name="share_file_status_pending">Waiting to send</string>
+    <string name="share_file_status_success">Sent</string>
+    <string name="share_file_status_failed">Failed: %1$s</string>
 </resources>

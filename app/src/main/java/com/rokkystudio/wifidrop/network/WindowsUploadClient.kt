@@ -21,6 +21,12 @@ import java.util.concurrent.TimeUnit
 class WindowsUploadClient(
     private val sharedFileReader: SharedFileReader,
 ) {
+    data class UploadResult(
+        val file: SharedFileReader.SharedFile,
+        val isSuccess: Boolean,
+        val errorMessage: String? = null,
+    )
+
     /**
      * Отправляет набор файлов на выбранный Windows-сервер.
      */
@@ -28,7 +34,7 @@ class WindowsUploadClient(
         wifiInfo: WifiNetworkProvider.WifiNetworkInfo,
         server: WindowsServer,
         files: List<SharedFileReader.SharedFile>,
-    ): Int {
+    ): List<UploadResult> {
         val client = OkHttpClient.Builder()
             .socketFactory(WifiBoundSocketFactory(wifiInfo.network))
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -36,17 +42,31 @@ class WindowsUploadClient(
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .retryOnConnectionFailure(false)
             .build()
+        val results = mutableListOf<UploadResult>()
 
         try {
             files.forEach { file ->
-                uploadSingleFile(client, server, file)
+                val result = runCatching {
+                    uploadSingleFile(client, server, file)
+                    UploadResult(file = file, isSuccess = true)
+                }.getOrElse { throwable ->
+                    val error = throwable.toWiFiDropError(
+                        WiFiDropError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
+                    )
+                    UploadResult(
+                        file = file,
+                        isSuccess = false,
+                        errorMessage = error.toUserMessage(sharedFileReader.appContext),
+                    )
+                }
+                results += result
             }
         } finally {
             client.dispatcher.executorService.shutdown()
             client.connectionPool.evictAll()
         }
 
-        return files.size
+        return results
     }
 
     /**

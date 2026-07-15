@@ -16,7 +16,8 @@ import java.io.InputStream
 class SharedFileReader(
     context: Context,
 ) {
-    private val contentResolver: ContentResolver = context.contentResolver
+    val appContext: Context = context.applicationContext
+    private val contentResolver: ContentResolver = appContext.contentResolver
 
     /**
      * Содержит сведения о файле, полученном через Share Intent.
