@@ -55,17 +55,18 @@ class WifiNetworkProvider(
      */
     private fun findWifiNetworkInfo(): WifiNetworkInfo? {
         val activeNetwork = connectivityManager.activeNetwork
-        if (activeNetwork != null) {
-            buildWifiNetworkInfo(activeNetwork)?.let { return it }
-        }
-
-        connectivityManager.allNetworks
+        val bestKnownNetwork = connectivityManager.allNetworks
             .asSequence()
-            .filter { it != activeNetwork }
             .mapNotNull(::buildWifiNetworkInfo)
             .sortedByDescending(::scoreNetworkInfo)
             .firstOrNull()
-            ?.let { return it }
+        if (bestKnownNetwork != null) {
+            return bestKnownNetwork
+        }
+
+        if (activeNetwork != null) {
+            buildWifiNetworkInfo(activeNetwork)?.let { return it }
+        }
 
         return awaitWifiNetworkInfo()
     }
@@ -81,8 +82,11 @@ class WifiNetworkProvider(
 
         val linkProperties = connectivityManager.getLinkProperties(network) ?: return null
         val dhcpInfo = getWifiDhcpInfo()
-        val ipv4Address = dhcpInfo?.ipv4Address ?: findIpv4Address(linkProperties) ?: return null
-        val prefixLength = dhcpInfo?.prefixLength ?: findPrefixLength(linkProperties, ipv4Address) ?: return null
+        val linkIpv4Address = findIpv4Address(linkProperties) ?: return null
+        val linkPrefixLength = findPrefixLength(linkProperties, linkIpv4Address) ?: return null
+        val usesDhcpAddress = dhcpInfo?.ipv4Address == linkIpv4Address
+        val ipv4Address = if (usesDhcpAddress) dhcpInfo.ipv4Address else linkIpv4Address
+        val prefixLength = if (usesDhcpAddress) dhcpInfo.prefixLength else linkPrefixLength
         val info = WifiNetworkInfo(
             network = network,
             ipv4Address = ipv4Address,
@@ -90,7 +94,9 @@ class WifiNetworkProvider(
         )
         Log.d(
             LOG_TAG,
-            "Wi-Fi candidate ${linkProperties.interfaceName ?: "<unknown>"} ${ipv4Address.hostAddress}/$prefixLength",
+            "Wi-Fi candidate ${linkProperties.interfaceName ?: "<unknown>"} ${ipv4Address.hostAddress}/$prefixLength " +
+                "transportInfo=${capabilities.transportInfo?.javaClass?.simpleName ?: "<none>"} " +
+                "dhcpMatch=$usesDhcpAddress",
         )
         return info
     }
@@ -124,8 +130,10 @@ class WifiNetworkProvider(
         val firstOctet = raw[0].toInt() and 0xFF
         val secondOctet = raw[1].toInt() and 0xFF
         return when {
-            firstOctet == 192 && secondOctet == 168 -> 3
-            info.ipv4Address.isSiteLocalAddress -> 2
+            firstOctet == 192 && secondOctet == 168 -> 4
+            firstOctet == 10 -> 3
+            firstOctet == 172 && secondOctet in 16..31 -> 2
+            info.ipv4Address.isSiteLocalAddress -> 1
             else -> 1
         }
     }
@@ -237,7 +245,8 @@ class WifiNetworkProvider(
      * Проверяет наличие Wi‑Fi транспорта у сети Android.
      */
     private fun NetworkCapabilities.isUsableWifiNetwork(): Boolean {
-        return hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        return hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+            !hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
     /**
