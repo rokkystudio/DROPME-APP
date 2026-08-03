@@ -48,7 +48,7 @@
     <string name="storage_state_needs_all_files">нужен доступ ко всем файлам</string>
     <string name="storage_state_needs_tree_grant">нужен доступ ко всем файлам</string>
     <string name="storage_state_unavailable">хранилище недоступно</string>
-    <string name="share_activity_title">DROPME Share</string>
+    <string name="share_activity_title">DROPME</string>
     <string name="share_status_preparing">Подготовка передачи…</string>
     <string name="share_status_scanning">Поиск Windows-серверов DROPME…</string>
     <string name="share_status_select_server">Выберите Windows-сервер</string>
@@ -60,6 +60,9 @@
     <string name="share_status_completed_success">Передача завершена</string>
     <string name="share_status_completed_partial">Передача завершена с ошибками</string>
     <string name="share_status_completed_failed">Не удалось отправить ни один файл</string>
+    <string name="share_status_completed_canceled">Передача отменена</string>
+    <string name="share_status_completed_canceled_partial">Передача остановлена</string>
+    <string name="share_status_cancel_pending">Остановка после текущего файла…</string>
     <string name="share_error_server_not_found">Сервер DROPME не найден в локальной сети</string>
     <string name="share_error_no_files">Файлы для передачи не найдены</string>
     <string name="share_error_empty_name">Не удалось определить имя файла</string>
@@ -67,21 +70,28 @@
     <string name="share_error_local_network_blocked">VPN запрещает передачу через локальную сеть</string>
     <string name="share_error_wifi_only">Передача доступна только по Wi‑Fi</string>
     <string name="share_action_retry">Повторить</string>
+    <string name="share_action_cancel">Отмена</string>
+    <string name="share_action_stopping">Остановка…</string>
     <string name="share_action_close">Закрыть</string>
     <string name="share_result_single">Файл отправлен</string>
     <string name="share_result_multiple">Отправлено файлов: %1$d</string>
     <string name="share_result_all_success">Все файлы отправлены</string>
     <string name="share_result_partial">Отправлено: %1$d, ошибок: %2$d</string>
     <string name="share_result_all_failed">Не удалось отправить файлы</string>
+    <string name="share_result_canceled">Отправлено: %1$d, отменено: %2$d</string>
     <string name="share_result_summary_success">Отправлено на %1$s</string>
     <string name="share_result_summary_partial">Отправлено на %1$s. Ошибок: %2$d.</string>
     <string name="share_result_summary_failed">Не удалось отправить на %1$s.</string>
+    <string name="share_result_summary_canceled">Отправлено на %1$s. Отправлено: %2$d, отменено: %3$d.</string>
     <string name="share_section_devices">Устройства</string>
     <string name="share_section_files">Файлы</string>
     <string name="share_server_row_title">%1$s</string>
     <string name="share_server_row_subtitle">%1$s:%2$d</string>
     <string name="share_file_status_pending">Ожидает отправки</string>
+    <string name="share_file_status_uploading">Отправка…</string>
     <string name="share_file_status_success">Отправлен</string>
     <string name="share_file_status_failed">Ошибка: %1$s</string>
+    <string name="share_file_status_canceled">Отменено</string>
+    <string name="share_progress_percent_and_bytes">%1$d%% • %2$s / %3$s</string>
+    <string name="share_progress_bytes_only">Передано: %1$s</string>
 </resources>
-

@@ -70,7 +70,8 @@ class SharedFileReader(
                     throw AppError.UploadFailed(reason = "Не удалось определить имя файла для передачи").asAppException()
                 }
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                val size = if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else null
+                val cursorSize = if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else null
+                val size = resolveSizeBytes(uri, cursorSize)
                 return SharedFile(uri = uri, displayName = name, sizeBytes = size)
             }
         }
@@ -102,6 +103,20 @@ class SharedFileReader(
             getParcelableArrayListExtra(Intent.EXTRA_STREAM)
         }
         return items?.filterNotNull().orEmpty()
+    }
+
+    /**
+     * Пытается определить размер через курсор или file descriptor.
+     */
+    private fun resolveSizeBytes(uri: Uri, cursorSize: Long?): Long? {
+        if (cursorSize != null && cursorSize >= 0L) {
+            return cursorSize
+        }
+        return runCatching {
+            contentResolver.openAssetFileDescriptor(uri, "r")?.use { descriptor ->
+                descriptor.length.takeIf { it >= 0L }
+            }
+        }.getOrNull()
     }
 
     private companion object {

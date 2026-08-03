@@ -10,7 +10,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import okio.BufferedSink
-import okio.source
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -21,11 +20,28 @@ import java.util.concurrent.TimeUnit
 class WindowsUploadClient(
     private val sharedFileReader: SharedFileReader,
 ) {
+    enum class UploadStatus {
+        SUCCESS,
+        FAILED,
+        CANCELED,
+    }
+
+    data class UploadProgress(
+        val file: SharedFileReader.SharedFile,
+        val fileBytesUploaded: Long,
+        val fileSizeBytes: Long,
+        val totalBytesUploaded: Long,
+        val totalBytesToUpload: Long,
+    )
+
     data class UploadResult(
         val file: SharedFileReader.SharedFile,
-        val isSuccess: Boolean,
+        val status: UploadStatus,
         val errorMessage: String? = null,
-    )
+    ) {
+        val isSuccess: Boolean
+            get() = status == UploadStatus.SUCCESS
+    }
 
     /**
      * Отправляет набор файлов на выбранный Windows-сервер.
@@ -34,6 +50,9 @@ class WindowsUploadClient(
         wifiInfo: WifiNetworkProvider.WifiNetworkInfo,
         server: WindowsServer,
         files: List<SharedFileReader.SharedFile>,
+        onProgress: ((UploadProgress) -> Unit)? = null,
+        onFileCompleted: ((UploadResult) -> Unit)? = null,
+        shouldCancel: (() -> Boolean)? = null,
     ): List<UploadResult> {
         val client = OkHttpClient.Builder()
             .socketFactory(WifiBoundSocketFactory(wifiInfo.network))
@@ -43,23 +62,55 @@ class WindowsUploadClient(
             .retryOnConnectionFailure(false)
             .build()
         val results = mutableListOf<UploadResult>()
+        val totalBytesToUpload = files.sumOf { file -> file.sizeBytes?.coerceAtLeast(0L) ?: 0L }
+        var completedBytesUploaded = 0L
 
         try {
-            files.forEach { file ->
+            for ((index, file) in files.withIndex()) {
+                if (shouldCancel?.invoke() == true) {
+                    results += files.subList(index, files.size).map { pendingFile ->
+                        UploadResult(
+                            file = pendingFile,
+                            status = UploadStatus.CANCELED,
+                        )
+                    }
+                    break
+                }
+
+                val fileSizeBytes = file.sizeBytes?.coerceAtLeast(0L) ?: 0L
+                var fileBytesUploaded = 0L
                 val result = runCatching {
-                    uploadSingleFile(client, server, file)
-                    UploadResult(file = file, isSuccess = true)
+                    uploadSingleFile(
+                        client = client,
+                        server = server,
+                        file = file,
+                        onProgress = { uploadedBytes, totalBytes ->
+                            fileBytesUploaded = uploadedBytes.coerceAtLeast(0L)
+                            onProgress?.invoke(
+                                UploadProgress(
+                                    file = file,
+                                    fileBytesUploaded = fileBytesUploaded,
+                                    fileSizeBytes = totalBytes.coerceAtLeast(fileSizeBytes),
+                                    totalBytesUploaded = completedBytesUploaded + fileBytesUploaded,
+                                    totalBytesToUpload = totalBytesToUpload,
+                                ),
+                            )
+                        },
+                    )
+                    UploadResult(file = file, status = UploadStatus.SUCCESS)
                 }.getOrElse { throwable ->
                     val error = throwable.toAppError(
                         AppError.UploadFailed(file.displayName, "Не удалось отправить файл ${file.displayName}"),
                     )
                     UploadResult(
                         file = file,
-                        isSuccess = false,
+                        status = UploadStatus.FAILED,
                         errorMessage = error.toUserMessage(sharedFileReader.appContext),
                     )
                 }
                 results += result
+                completedBytesUploaded += fileBytesUploaded
+                onFileCompleted?.invoke(result)
             }
         } finally {
             client.dispatcher.executorService.shutdown()
@@ -76,6 +127,7 @@ class WindowsUploadClient(
         client: OkHttpClient,
         server: WindowsServer,
         file: SharedFileReader.SharedFile,
+        onProgress: ((uploadedBytes: Long, totalBytes: Long) -> Unit)? = null,
     ) {
         Log.d(LOG_TAG, "Share upload: ${file.displayName} -> ${server.host}:${server.tcpPort}")
         val encodedName = URLEncoder.encode(file.displayName, StandardCharsets.UTF_8.name())
@@ -83,7 +135,7 @@ class WindowsUploadClient(
             for (basePath in WindowsServerApi.basePaths) {
                 val request = Request.Builder()
                     .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, "/upload?name=$encodedName"))
-                    .put(SharedFileRequestBody(sharedFileReader, file))
+                    .put(SharedFileRequestBody(sharedFileReader, file, onProgress))
                     .build()
                 client.newCall(request).execute().use { response ->
                     if (response.code == 404) {
@@ -121,23 +173,29 @@ class WindowsUploadClient(
     private class SharedFileRequestBody(
         private val sharedFileReader: SharedFileReader,
         private val file: SharedFileReader.SharedFile,
+        private val onProgress: ((uploadedBytes: Long, totalBytes: Long) -> Unit)? = null,
     ) : RequestBody() {
-        /**
-         * Возвращает MIME-тип upload body.
-         */
         override fun contentType() = OCTET_STREAM
 
-        /**
-         * Возвращает длину содержимого, если она известна.
-         */
         override fun contentLength(): Long = file.sizeBytes ?: -1L
 
-        /**
-         * Записывает содержимое файла в HTTP поток.
-         */
         override fun writeTo(sink: BufferedSink) {
+            val totalBytes = contentLength().coerceAtLeast(0L)
+            var uploadedBytes = 0L
             sharedFileReader.openInputStream(file).use { inputStream ->
-                sink.writeAll(inputStream.source())
+                val buffer = ByteArray(UPLOAD_BUFFER_SIZE_BYTES)
+                while (true) {
+                    val readBytes = inputStream.read(buffer)
+                    if (readBytes < 0) {
+                        break
+                    }
+                    sink.write(buffer, 0, readBytes)
+                    uploadedBytes += readBytes
+                    onProgress?.invoke(uploadedBytes, totalBytes)
+                }
+                if (uploadedBytes == 0L) {
+                    onProgress?.invoke(0L, totalBytes)
+                }
             }
         }
     }
@@ -147,8 +205,7 @@ class WindowsUploadClient(
         const val CONNECT_TIMEOUT_SECONDS = 10L
         const val READ_TIMEOUT_SECONDS = 60L
         const val WRITE_TIMEOUT_SECONDS = 60L
+        const val UPLOAD_BUFFER_SIZE_BYTES = 64 * 1024
         val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }
-
-

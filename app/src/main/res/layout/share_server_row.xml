@@ -1,25 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/selectableItemBackground"
+    android:layout_marginBottom="10dp"
     android:clickable="true"
     android:focusable="true"
-    android:orientation="vertical"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="12dp">
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="@color/share_surface"
+    app:cardCornerRadius="8dp"
+    app:strokeColor="@color/share_border"
+    app:strokeWidth="1dp">
 
-    <TextView
-        android:id="@+id/shareServerRowTitle"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="14dp">
 
-    <TextView
-        android:id="@+id/shareServerRowSubtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+        <TextView
+            android:id="@+id/shareServerRowTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/shareServerRowSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+            android:textColor="@color/share_text_secondary" />
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>
