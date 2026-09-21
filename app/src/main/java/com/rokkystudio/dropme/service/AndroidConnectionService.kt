@@ -41,6 +41,7 @@ class AndroidConnectionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
         windowsControlClient = WindowsControlClient(applicationContext)
         storageRootsRepository = StorageRootsRepository(applicationContext)
@@ -93,6 +94,7 @@ class AndroidConnectionService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         disconnectRequested = true
         stopActiveConnection()
         executor.shutdownNow()
@@ -347,7 +349,15 @@ class AndroidConnectionService : Service() {
     }
 
     companion object {
+        @Volatile
+        private var running = false
+
         const val ACTION_STATE_CHANGED = "com.rokkystudio.dropme.ACTION_CONNECTION_STATE_CHANGED"
+
+        /**
+         * Возвращает признак существования экземпляра connection service в текущем процессе приложения.
+         */
+        fun isRunning(): Boolean = running
 
         private const val ACTION_START = "com.rokkystudio.dropme.action.START_CONNECTION"
         private const val ACTION_STOP = "com.rokkystudio.dropme.action.STOP_CONNECTION"

@@ -100,7 +100,13 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         registerConnectionStateReceiver()
         val snapshot = connectionStateStore.read()
-        if (snapshot.phase != ConnectionServicePhase.IDLE) {
+        if (snapshot.isActive) {
+            if (AndroidConnectionService.isRunning()) {
+                renderConnectionState(snapshot)
+            } else {
+                startDiscoveryFlow()
+            }
+        } else if (snapshot.phase != ConnectionServicePhase.IDLE) {
             renderConnectionState(snapshot)
         }
     }
@@ -160,7 +166,7 @@ class MainActivity : AppCompatActivity() {
     private fun continueAfterStorageAccess() {
         refreshStorageRootsState()
         val snapshot = connectionStateStore.read()
-        if (snapshot.isActive) {
+        if (snapshot.isActive && AndroidConnectionService.isRunning()) {
             renderConnectionState(snapshot)
         } else {
             startDiscoveryFlow()
@@ -178,9 +184,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun startDiscoveryFlow() {
         val snapshot = connectionStateStore.read()
-        if (snapshot.isActive) {
+        if (snapshot.isActive && AndroidConnectionService.isRunning()) {
             renderConnectionState(snapshot)
             return
+        }
+        if (snapshot.phase != ConnectionServicePhase.IDLE) {
+            connectionStateStore.write(
+                ConnectionServiceSnapshot(
+                    phase = ConnectionServicePhase.IDLE,
+                    detailMessage = getString(R.string.main_status_disconnected_detail),
+                ),
+            )
         }
         if (!ensureStorageAccessGranted()) {
             return

@@ -293,6 +293,7 @@ class AndroidWebDavServer(
         val responseLength = requestedRange?.length ?: length
         val headers = linkedMapOf(
             "Content-Type" to "application/octet-stream",
+            "Content-Disposition" to "attachment; filename*=UTF-8''${Uri.encode(node.displayName)}",
             "Content-Length" to responseLength.toString(),
             "ETag" to buildEtag(node),
             "Accept-Ranges" to "bytes",
@@ -382,37 +383,73 @@ class AndroidWebDavServer(
         )
     }
 
+    /**
+     * Формирует браузерный файловый интерфейс в стиле Проводника Windows.
+     * Каталоги открываются внутри WebDAV-дерева, файлы скачиваются по прямым ссылкам,
+     * а верхняя панель предлагает WinFsp как основной способ работы через Проводник Windows.
+     */
     private fun buildDirectoryListingHtml(node: ResolvedNode): String {
         val children = listChildren(node)
-        val title = if (node.isVirtualRoot) "/" else node.displayName
+        val title = if (node.isVirtualRoot) "Этот телефон" else node.displayName
         return buildString {
-            append("<!DOCTYPE html><html><head><meta charset=\"utf-8\">")
-            append("<title>").append(escapeXml(title)).append("</title>")
+            append("<!DOCTYPE html><html lang=\"ru\"><head><meta charset=\"utf-8\">")
+            append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
+            append("<title>").append(escapeXml(title)).append(" — DROPME</title>")
             append("<style>")
-            append("body{font-family:Segoe UI,Arial,sans-serif;margin:24px;line-height:1.4;}")
-            append("h1{font-size:20px;margin:0 0 16px;}ul{list-style:none;padding:0;margin:0;}")
-            append("li{margin:6px 0;}a{text-decoration:none;}a:hover{text-decoration:underline;}")
-            append(".meta{color:#666;font-size:12px;margin-left:8px;}")
-            append("</style></head><body>")
-            append("<h1>").append(escapeXml(title)).append("</h1>")
-            append("<ul>")
+            append("*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:'Segoe UI',Arial,sans-serif;color:#202020;background:#f3f3f3}")
+            append("body{padding:18px}.window{max-width:1180px;margin:0 auto;background:#fff;border:1px solid #d9d9d9;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.10);overflow:hidden}")
+            append(".titlebar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid #e5e5e5;background:#fafafa}.appicon{width:23px;height:23px;border-radius:5px;background:#1676d2;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700}.apptitle{font-size:14px;font-weight:600}")
+            append(".notice{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;background:#f0f7ff;border-bottom:1px solid #d5e8fb}.notice-text{font-size:13px;line-height:1.45}.notice-title{font-weight:600;margin-bottom:2px}.install{display:inline-block;flex:none;padding:8px 13px;border-radius:5px;background:#0067c0;color:#fff;text-decoration:none;font-size:13px;font-weight:600}.install:hover{background:#005a9e}")
+            append(".toolbar{padding:10px 14px;border-bottom:1px solid #e8e8e8}.address{display:flex;align-items:center;gap:4px;min-height:36px;padding:5px 8px;border:1px solid #cfcfcf;border-radius:5px;overflow:auto;white-space:nowrap}.address a,.address span{color:#202020;text-decoration:none;padding:3px 5px;border-radius:4px}.address a:hover{background:#edf5fd}.sep{color:#777}")
+            append(".content{padding:8px 12px 18px}.header,.row{display:grid;grid-template-columns:minmax(260px,1fr) 140px 150px;align-items:center;column-gap:14px}.header{height:34px;padding:0 10px;border-bottom:1px solid #e5e5e5;color:#666;font-size:12px}.row{min-height:42px;padding:4px 10px;border-bottom:1px solid #f1f1f1;font-size:13px}.row:hover{background:#eef6ff}.name{display:flex;align-items:center;min-width:0;gap:9px}.name a{color:#202020;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.icon{width:22px;text-align:center;font-size:18px}.type,.size{color:#666;white-space:nowrap}.empty{padding:34px 12px;text-align:center;color:#777}")
+            append("@media(max-width:700px){body{padding:0}.window{border:0;border-radius:0;box-shadow:none;min-height:100vh}.notice{align-items:flex-start;flex-direction:column}.header,.row{grid-template-columns:minmax(180px,1fr) 90px}.size{display:none}}")
+            append("</style></head><body><div class=\"window\">")
+            append("<div class=\"titlebar\"><span class=\"appicon\">D</span><span class=\"apptitle\">DROPME — ").append(escapeXml(title)).append("</span></div>")
+            append("<div class=\"notice\"><div class=\"notice-text\"><div class=\"notice-title\">Открывайте телефон как обычный диск в Проводнике Windows</div><div>WinFsp — основной компонент DROPME для работы с файлами через Проводник. WebClient и этот браузер используются как резервный режим.</div></div>")
+            append("<a class=\"install\" href=\"").append(WINFSP_DOWNLOAD_URL).append("\">Скачать WinFsp</a></div>")
+            append("<div class=\"toolbar\"><div class=\"address\"><a href=\"/\">Этот телефон</a>")
+            node.segments.forEachIndexed { index, segment ->
+                val path = node.segments.take(index + 1).joinToString("/") { Uri.encode(it) }
+                append("<span class=\"sep\">›</span><a href=\"/").append(path).append("/\">").append(escapeXml(segment)).append("</a>")
+            }
+            append("</div></div>")
+            append("<div class=\"content\"><div class=\"header\"><div>Имя</div><div>Тип</div><div class=\"size\">Размер</div></div>")
             buildParentLink(node)?.let { parentHref ->
-                append("<li><a href=\"").append(escapeXml(parentHref)).append("\">..</a></li>")
+                append("<div class=\"row\"><div class=\"name\"><span class=\"icon\">↩</span><a href=\"").append(escapeXml(parentHref)).append("\">Назад</a></div><div class=\"type\">Папка</div><div class=\"size\"></div></div>")
+            }
+            if (children.isEmpty()) {
+                append("<div class=\"empty\">Эта папка пуста</div>")
             }
             children.forEach { child ->
                 val href = buildHref(child)
-                append("<li><a href=\"").append(escapeXml(href)).append("\">")
-                append(escapeXml(child.displayName))
-                if (child.isDirectory) {
-                    append("/")
-                }
-                append("</a>")
+                append("<div class=\"row\"><div class=\"name\"><span class=\"icon\">")
+                append(if (child.isDirectory) "📁" else "📄")
+                append("</span><a href=\"").append(escapeXml(href)).append("\"")
                 if (!child.isDirectory) {
-                    append("<span class=\"meta\">").append(child.contentLength().coerceAtLeast(0L)).append(" bytes</span>")
+                    append(" download")
                 }
-                append("</li>")
+                append(">").append(escapeXml(child.displayName)).append("</a></div>")
+                append("<div class=\"type\">").append(if (child.isDirectory) "Папка" else "Файл").append("</div>")
+                append("<div class=\"size\">")
+                if (!child.isDirectory) {
+                    append(formatBrowserFileSize(child.contentLength()))
+                }
+                append("</div></div>")
             }
-            append("</ul></body></html>")
+            append("</div></div></body></html>")
+        }
+    }
+
+    /**
+     * Форматирует размер файла для браузерного представления каталога.
+     */
+    private fun formatBrowserFileSize(byteCount: Long): String {
+        val size = byteCount.coerceAtLeast(0L)
+        return when {
+            size >= 1024L * 1024L * 1024L -> String.format(Locale.US, "%.1f GB", size.toDouble() / (1024.0 * 1024.0 * 1024.0))
+            size >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", size.toDouble() / (1024.0 * 1024.0))
+            size >= 1024L -> String.format(Locale.US, "%.1f KB", size.toDouble() / 1024.0)
+            else -> "$size B"
         }
     }
 
@@ -1088,7 +1125,7 @@ class AndroidWebDavServer(
         } else {
             rawValue
         }
-        return URLDecoder.decode(path.ifBlank { "/" }, StandardCharsets.UTF_8.name())
+        return Uri.decode(path.ifBlank { "/" })
     }
 
     private fun writeSimpleResponse(
@@ -1277,6 +1314,7 @@ class AndroidWebDavServer(
     private companion object {
         const val LOG_TAG = "DROPME"
         const val SOCKET_TIMEOUT_MS = 10_000
+        const val WINFSP_DOWNLOAD_URL = "https://github.com/rokkystudio/WIFIDROP-WIN/raw/refs/heads/master/Files/winfsp-2.2.26215.msi"
         const val API_META_PATH = "/.dropmefs/meta"
         const val API_LIST_PATH = "/.dropmefs/list"
     }
