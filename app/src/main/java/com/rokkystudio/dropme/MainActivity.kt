@@ -45,7 +45,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var themeToggleButton: ImageButton
     private lateinit var languageFlag: ImageButton
     private lateinit var statusText: TextView
-    private lateinit var scanStatusText: TextView
     private lateinit var detailText: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var storageRootsListView: ListView
@@ -137,7 +136,6 @@ class MainActivity : AppCompatActivity() {
         themeToggleButton = findViewById(R.id.themeToggleButton)
         languageFlag = findViewById(R.id.languageFlag)
         statusText = findViewById(R.id.mainStatusText)
-        scanStatusText = findViewById(R.id.mainStatsText)
         detailText = findViewById(R.id.mainDetailText)
         progressBar = findViewById(R.id.mainProgressBar)
         storageRootsListView = findViewById(R.id.mainStorageRootsListView)
@@ -314,13 +312,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderScanningIndicator() {
-        scanStatusText.text = getString(R.string.main_status_network_scanning)
-        scanStatusText.visibility = View.VISIBLE
         progressBar.visibility = View.VISIBLE
     }
 
     private fun renderScanError(error: AppError) {
-        scanStatusText.text = getString(R.string.main_status_network_scanning)
         progressBar.visibility = View.VISIBLE
         if (connectionStateStore.read().phase == ConnectionServicePhase.IDLE) {
             detailText.text = error.toUserMessage(this)
