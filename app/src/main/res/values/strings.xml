@@ -7,6 +7,8 @@
     <string name="main_activity_stage_one_description">Stage 1 handles file sharing from the Android Share menu to Windows DROPME Server over the local Wi-Fi network.</string>
     <string name="main_status_preparing">Preparing Wi-Fi connection…</string>
     <string name="main_status_scanning">Searching for DROPME Windows servers…</string>
+    <string name="main_status_network_scanning">Scanning network</string>
+    <string name="main_no_servers_found">No servers detected</string>
     <string name="main_status_scanning_detail">Scanning local Wi-Fi subnet by IP addresses.</string>
     <string name="main_status_scanning_host">Current IP: %1$s</string>
     <string name="main_status_select_server">Select a Windows server</string>
@@ -29,7 +31,9 @@
     <string name="service_notification_connected_text">Android storage is connected to %1$s.</string>
     <string name="main_storage_roots_title">Storage roots</string>
     <string name="main_error_no_storage_roots_ready">Grant all files access before connecting to Windows.</string>
-    <string name="main_storage_access_denied">All files access was not granted. DROPME will close.</string>
+    <string name="main_storage_access_denied">Storage access was not granted.</string>
+    <string name="storage_access_granted">Access granted</string>
+    <string name="storage_access_not_granted">Access not granted</string>
     <string name="main_stats_wifi_ip">Wi-Fi IP: %1$s</string>
     <string name="main_stats_prefix">Prefix: /%1$d</string>
     <string name="main_stats_port">Scan port: %1$d</string>

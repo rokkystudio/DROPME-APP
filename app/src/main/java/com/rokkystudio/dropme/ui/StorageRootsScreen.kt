@@ -1,38 +1,53 @@
 package com.rokkystudio.dropme.ui
 
 import android.content.Context
+import android.graphics.PorterDuff
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import com.rokkystudio.dropme.R
 import com.rokkystudio.dropme.storage.StorageAccessState
 import com.rokkystudio.dropme.storage.StorageRootEntry
-import com.rokkystudio.dropme.storage.StorageRootType
 
 /**
- * Показывает список доступных хранилищ Android и обрабатывает действия по выдаче доступа.
+ * Показывает корни хранилища с цветным индикатором доступа.
  */
 class StorageRootsScreen(
     private val context: Context,
     private val listView: ListView,
     private val onRootSelected: (StorageRootEntry) -> Unit,
 ) {
+    private val inflater = LayoutInflater.from(context)
+
     fun show(roots: List<StorageRootEntry>) {
         val adapter = object : ArrayAdapter<StorageRootEntry>(
             context,
-            android.R.layout.simple_list_item_2,
-            android.R.id.text1,
+            R.layout.storage_root_row,
+            R.id.storageRootTitle,
             roots,
         ) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val view = super.getView(position, convertView, parent)
+                val view = convertView ?: inflater.inflate(R.layout.storage_root_row, parent, false)
                 val root = getItem(position) ?: return view
-                val titleView = view.findViewById<TextView>(android.R.id.text1)
-                val subtitleView = view.findViewById<TextView>(android.R.id.text2)
+                val iconView = view.findViewById<ImageView>(R.id.storageRootIcon)
+                val titleView = view.findViewById<TextView>(R.id.storageRootTitle)
+                val stateView = view.findViewById<TextView>(R.id.storageRootState)
+
                 titleView.text = root.displayName
-                subtitleView.text = buildSubtitle(root)
+                val ready = root.accessState == StorageAccessState.READY
+                stateView.text = context.getString(
+                    if (ready) R.string.storage_access_granted else R.string.storage_access_not_granted,
+                )
+                val color = ContextCompat.getColor(
+                    context,
+                    if (ready) R.color.status_connected else R.color.status_error,
+                )
+                iconView.setColorFilter(color, PorterDuff.Mode.SRC_IN)
                 return view
             }
         }
@@ -42,24 +57,4 @@ class StorageRootsScreen(
             adapter.getItem(position)?.let(onRootSelected)
         }
     }
-
-    private fun buildSubtitle(root: StorageRootEntry): String {
-        val typeText = when (root.type) {
-            StorageRootType.INTERNAL -> context.getString(R.string.storage_type_internal)
-            StorageRootType.REMOVABLE -> context.getString(R.string.storage_type_removable)
-        }
-        val stateText = when (root.accessState) {
-            StorageAccessState.READY -> if (root.isWritable) {
-                context.getString(R.string.storage_state_ready_rw)
-            } else {
-                context.getString(R.string.storage_state_ready_ro)
-            }
-
-            StorageAccessState.NEEDS_ALL_FILES_ACCESS -> context.getString(R.string.storage_state_needs_all_files)
-            StorageAccessState.NEEDS_TREE_GRANT -> context.getString(R.string.storage_state_needs_tree_grant)
-            StorageAccessState.UNAVAILABLE -> context.getString(R.string.storage_state_unavailable)
-        }
-        return "$typeText • $stateText"
-    }
 }
-

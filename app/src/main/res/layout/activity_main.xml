@@ -98,19 +98,36 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:includeFontPadding="false"
+                android:text="@string/main_status_select_server"
                 android:textColor="@color/text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/mainStatsText"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:includeFontPadding="false"
-                android:textColor="@color/text_secondary"
-                android:textIsSelectable="true"
-                android:textSize="13sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ProgressBar
+                    android:id="@+id/mainProgressBar"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/accent" />
+
+                <TextView
+                    android:id="@+id/mainStatsText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:includeFontPadding="false"
+                    android:text="@string/main_status_network_scanning"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/mainDetailText"
@@ -120,14 +137,6 @@
                 android:includeFontPadding="false"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
-
-            <ProgressBar
-                android:id="@+id/mainProgressBar"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="12dp"
-                android:indeterminateTint="@color/accent" />
         </LinearLayout>
 
         <LinearLayout
@@ -157,6 +166,18 @@
                 android:dividerHeight="1dp" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/mainNoServersText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:gravity="center"
+            android:padding="18dp"
+            android:text="@string/main_no_servers_found"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp" />
+
         <ListView
             android:id="@+id/mainServerListView"
             android:layout_width="match_parent"
@@ -168,21 +189,6 @@
             android:dividerHeight="1dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:visibility="gone" />
-
-        <Button
-            android:id="@+id/mainRetryButton"
-            android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/bg_button"
-            android:fontFamily="sans"
-            android:stateListAnimator="@null"
-            android:text="@string/share_action_retry"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            android:textStyle="bold"
             android:visibility="gone" />
 
         <Button

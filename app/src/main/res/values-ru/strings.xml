@@ -7,6 +7,8 @@
     <string name="main_activity_stage_one_description">Этап 1 выполняет отправку файлов из Android Share menu в Windows DROPME Server по локальной сети Wi‑Fi.</string>
     <string name="main_status_preparing">Подготовка Wi‑Fi подключения…</string>
     <string name="main_status_scanning">Поиск Windows-серверов DROPME…</string>
+    <string name="main_status_network_scanning">Сканирование сети</string>
+    <string name="main_no_servers_found">Серверов не обнаружено</string>
     <string name="main_status_scanning_detail">Сканирование локальной Wi‑Fi подсети по IP-адресам.</string>
     <string name="main_status_scanning_host">Текущий IP: %1$s</string>
     <string name="main_status_select_server">Выберите Windows-сервер</string>
@@ -29,7 +31,9 @@
     <string name="service_notification_connected_text">Хранилище Android подключено к %1$s.</string>
     <string name="main_storage_roots_title">Корни хранилища</string>
     <string name="main_error_no_storage_roots_ready">Перед подключением к Windows откройте доступ ко всем файлам.</string>
-    <string name="main_storage_access_denied">Доступ ко всем файлам не предоставлен. DROPME будет закрыт.</string>
+    <string name="main_storage_access_denied">Доступ к хранилищу не предоставлен.</string>
+    <string name="storage_access_granted">Доступ предоставлен</string>
+    <string name="storage_access_not_granted">Доступ не предоставлен</string>
     <string name="main_stats_wifi_ip">Wi‑Fi IP: %1$s</string>
     <string name="main_stats_prefix">Префикс: /%1$d</string>
     <string name="main_stats_port">Порт сканирования: %1$d</string>
