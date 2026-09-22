@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -15,6 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WifiNetworkProvider
 import com.rokkystudio.dropme.network.WindowsServer
@@ -79,18 +79,6 @@ class MainActivity : AppCompatActivity() {
                 finishAndRemoveTask()
             }
         }
-
-    override fun attachBaseContext(newBase: Context) {
-        val theme = UiSettings(newBase).getTheme()
-        val configuration = Configuration(newBase.resources.configuration)
-        val nightMode = when (theme) {
-            AppTheme.LIGHT -> Configuration.UI_MODE_NIGHT_NO
-            AppTheme.DARK -> Configuration.UI_MODE_NIGHT_YES
-        }
-        configuration.uiMode =
-            (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
-        super.attachBaseContext(newBase.createConfigurationContext(configuration))
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -185,7 +173,12 @@ class MainActivity : AppCompatActivity() {
             AppTheme.DARK -> AppTheme.LIGHT
         }
         uiSettings.setTheme(theme)
-        recreate()
+        AppCompatDelegate.setDefaultNightMode(
+            when (theme) {
+                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            },
+        )
     }
 
     private fun renderThemeToggle() {

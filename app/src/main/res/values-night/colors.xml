@@ -15,4 +15,14 @@
     <color name="status_error">#FFE16B6B</color>
     <color name="title_bar_button_pressed">#FF283F4D</color>
     <color name="button_pressed">#FF1D232A</color>
+    <color name="share_border">#FF2A3442</color>
+    <color name="share_error">#FFE16B6B</color>
+    <color name="share_pending">#FF94A3B8</color>
+    <color name="share_screen_background">#FF0B1220</color>
+    <color name="share_success">#FF4CAF50</color>
+    <color name="share_surface">#FF111A2B</color>
+    <color name="share_text_secondary">#FF9FB0C7</color>
+    <color name="share_uploading">#FF60A5FA</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
 </resources>

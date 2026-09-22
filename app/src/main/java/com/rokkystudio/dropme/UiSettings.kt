@@ -17,7 +17,7 @@ class UiSettings(context: Context) {
     }
 
     fun setTheme(theme: AppTheme) {
-        preferences.edit().putString(KEY_THEME, theme.preferenceValue).apply()
+        preferences.edit().putString(KEY_THEME, theme.preferenceValue).commit()
     }
 
     private companion object {
