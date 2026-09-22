@@ -502,7 +502,10 @@ class ShareActivity : AppCompatActivity() {
         progressBar.max = MAX_PROGRESS
         progressBar.progress = 0
         progressBar.progressTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.share_uploading),
+            ContextCompat.getColor(this, R.color.share_progress),
+        )
+        progressBar.progressBackgroundTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, R.color.share_progress_track),
         )
         renderOverallProgress(0L, totalUploadBytes())
         closeButton.visibility = View.VISIBLE
@@ -618,52 +621,36 @@ class ShareActivity : AppCompatActivity() {
         rowViews.progressBar.progress = progressPercent(item.transferredBytes, item.totalBytes, item.state)
         rowViews.progressTextView.text = formatProgressText(item.transferredBytes, item.totalBytes)
 
-        when (item.state) {
-            FileTransferState.PENDING -> {
-                val color = ContextCompat.getColor(this, R.color.share_pending)
-                rowViews.iconView.setImageResource(android.R.drawable.presence_invisible)
-                rowViews.iconView.imageTintList = ColorStateList.valueOf(color)
-                rowViews.statusView.setTextColor(color)
-                rowViews.progressTextView.setTextColor(color)
-                rowViews.progressBar.progressTintList = ColorStateList.valueOf(color)
-            }
-
-            FileTransferState.UPLOADING -> {
-                val color = ContextCompat.getColor(this, R.color.share_uploading)
-                rowViews.iconView.setImageResource(android.R.drawable.stat_sys_upload)
-                rowViews.iconView.imageTintList = ColorStateList.valueOf(color)
-                rowViews.statusView.setTextColor(color)
-                rowViews.progressTextView.setTextColor(color)
-                rowViews.progressBar.progressTintList = ColorStateList.valueOf(color)
-            }
-
-            FileTransferState.SUCCESS -> {
-                val color = ContextCompat.getColor(this, R.color.share_success)
-                rowViews.iconView.setImageResource(android.R.drawable.checkbox_on_background)
-                rowViews.iconView.imageTintList = ColorStateList.valueOf(color)
-                rowViews.statusView.setTextColor(color)
-                rowViews.progressTextView.setTextColor(color)
-                rowViews.progressBar.progressTintList = ColorStateList.valueOf(color)
-            }
-
-            FileTransferState.FAILED -> {
-                val color = ContextCompat.getColor(this, R.color.share_error)
-                rowViews.iconView.setImageResource(android.R.drawable.ic_delete)
-                rowViews.iconView.imageTintList = ColorStateList.valueOf(color)
-                rowViews.statusView.setTextColor(color)
-                rowViews.progressTextView.setTextColor(color)
-                rowViews.progressBar.progressTintList = ColorStateList.valueOf(color)
-            }
-
-            FileTransferState.CANCELED -> {
-                val color = ContextCompat.getColor(this, R.color.share_pending)
-                rowViews.iconView.setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-                rowViews.iconView.imageTintList = ColorStateList.valueOf(color)
-                rowViews.statusView.setTextColor(color)
-                rowViews.progressTextView.setTextColor(color)
-                rowViews.progressBar.progressTintList = ColorStateList.valueOf(color)
-            }
+        val statusColorRes = when (item.state) {
+            FileTransferState.PENDING -> R.color.share_pending
+            FileTransferState.UPLOADING -> R.color.share_uploading
+            FileTransferState.SUCCESS -> R.color.share_success
+            FileTransferState.FAILED -> R.color.share_error
+            FileTransferState.CANCELED -> R.color.share_canceled
         }
+        val iconRes = when (item.state) {
+            FileTransferState.PENDING -> R.drawable.ic_share_pending
+            FileTransferState.UPLOADING -> R.drawable.ic_share_uploading
+            FileTransferState.SUCCESS -> R.drawable.ic_share_success
+            FileTransferState.FAILED -> R.drawable.ic_share_error
+            FileTransferState.CANCELED -> R.drawable.ic_share_canceled
+        }
+        val progressColorRes = when (item.state) {
+            FileTransferState.FAILED -> R.color.share_error
+            FileTransferState.CANCELED -> R.color.share_canceled
+            else -> R.color.share_progress
+        }
+        val statusColor = ContextCompat.getColor(this, statusColorRes)
+        rowViews.iconView.setImageResource(iconRes)
+        rowViews.iconView.imageTintList = null
+        rowViews.statusView.setTextColor(statusColor)
+        rowViews.progressTextView.setTextColor(statusColor)
+        rowViews.progressBar.progressTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, progressColorRes),
+        )
+        rowViews.progressBar.progressBackgroundTintList = ColorStateList.valueOf(
+            ContextCompat.getColor(this, R.color.share_progress_track),
+        )
     }
 
     private fun renderOverallProgress(uploadedBytes: Long, totalBytes: Long) {
