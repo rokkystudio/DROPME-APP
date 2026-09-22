@@ -8,8 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.rokkystudio.dropme.MainActivity
@@ -268,17 +272,35 @@ class AndroidConnectionService : Service() {
             ConnectionServicePhase.IDLE -> getString(R.string.main_status_disconnected_detail)
         }
 
+        val notificationAccent = ContextCompat.getColor(this, R.color.status_connected)
+        val disconnectTitle = SpannableString(getString(R.string.service_action_disconnect)).apply {
+            setSpan(
+                ForegroundColorSpan(notificationAccent),
+                0,
+                length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        val largeIcon = BitmapFactory.decodeResource(
+            resources,
+            R.drawable.notification_large_icon,
+        )
+
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
+            .setLargeIcon(largeIcon)
+            .setColor(notificationAccent)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(openAppIntent)
             .setOngoing(snapshot.isActive)
             .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .addAction(
-                0,
-                getString(R.string.service_action_disconnect),
+                R.mipmap.ic_launcher_monochrome,
+                disconnectTitle,
                 disconnectIntent,
             )
             .build()
