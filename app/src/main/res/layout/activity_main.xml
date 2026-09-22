@@ -107,6 +107,21 @@
             android:includeFontPadding="false"
             android:textColor="@color/text_secondary"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/mainDisconnectButton"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_button"
+            android:fontFamily="sans"
+            android:stateListAnimator="@null"
+            android:text="@string/main_action_disconnect"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
 
     <ScrollView
@@ -209,20 +224,6 @@
                     android:visibility="gone" />
             </LinearLayout>
 
-            <Button
-                android:id="@+id/mainDisconnectButton"
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_button"
-                android:fontFamily="sans"
-                android:stateListAnimator="@null"
-                android:text="@string/main_action_disconnect"
-                android:textAllCaps="false"
-                android:textColor="@color/text_primary"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
