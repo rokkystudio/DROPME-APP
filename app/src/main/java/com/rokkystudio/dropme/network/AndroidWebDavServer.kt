@@ -1314,7 +1314,7 @@ class AndroidWebDavServer(
     private companion object {
         const val LOG_TAG = "DROPME"
         const val SOCKET_TIMEOUT_MS = 10_000
-        const val WINFSP_DOWNLOAD_URL = "https://github.com/rokkystudio/WIFIDROP-WIN/raw/refs/heads/master/Files/winfsp-2.2.26215.msi"
+        const val WINFSP_DOWNLOAD_URL = "https://github.com/rokkystudio/DROPME-WIN/raw/refs/heads/master/Files/winfsp-2.2.26215.msi"
         const val API_META_PATH = "/.dropmefs/meta"
         const val API_LIST_PATH = "/.dropmefs/list"
     }
