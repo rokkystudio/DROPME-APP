@@ -11,7 +11,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.widget.ImageButton
-import android.widget.ListView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -47,8 +47,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var detailText: TextView
     private lateinit var progressBar: ProgressBar
-    private lateinit var storageRootsListView: ListView
-    private lateinit var serverListView: ListView
+    private lateinit var storageRootsContainer: LinearLayout
+    private lateinit var serverListContainer: LinearLayout
     private lateinit var noServersText: TextView
     private lateinit var disconnectButton: android.widget.Button
 
@@ -138,8 +138,8 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.mainStatusText)
         detailText = findViewById(R.id.mainDetailText)
         progressBar = findViewById(R.id.mainProgressBar)
-        storageRootsListView = findViewById(R.id.mainStorageRootsListView)
-        serverListView = findViewById(R.id.mainServerListView)
+        storageRootsContainer = findViewById(R.id.mainStorageRootsContainer)
+        serverListContainer = findViewById(R.id.mainServerListContainer)
         noServersText = findViewById(R.id.mainNoServersText)
         disconnectButton = findViewById(R.id.mainDisconnectButton)
     }
@@ -151,12 +151,12 @@ class MainActivity : AppCompatActivity() {
         connectionStateStore = ConnectionServiceStateStore(applicationContext)
         serverPickerScreen = ShareServerPickerScreen(
             context = this,
-            listView = serverListView,
+            container = serverListContainer,
             onServerSelected = ::connectToServer,
         )
         storageRootsScreen = StorageRootsScreen(
             context = this,
-            listView = storageRootsListView,
+            container = storageRootsContainer,
             onRootSelected = ::handleStorageRootSelected,
         )
     }
@@ -307,7 +307,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderServerList() {
         serverPickerScreen.show(discoveredServers)
         val hasServers = discoveredServers.isNotEmpty()
-        serverListView.visibility = if (hasServers) View.VISIBLE else View.GONE
+        serverListContainer.visibility = if (hasServers) View.VISIBLE else View.GONE
         noServersText.visibility = if (hasServers) View.GONE else View.VISIBLE
     }
 

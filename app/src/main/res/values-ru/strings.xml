@@ -4,7 +4,7 @@
     <string name="theme_light">Светлая тема</string>
     <string name="theme_dark">Тёмная тема</string>
     <string name="language_indicator">Текущий язык</string>
-    <string name="main_activity_stage_one_description">Этап 1 выполняет отправку файлов из Android Share menu в Windows DROPME Server по локальной сети Wi‑Fi.</string>
+    <string name="main_activity_stage_one_description">Отправка файлов из меню «Поделиться» Android в DROPME для Windows по локальной сети Wi‑Fi.</string>
     <string name="main_status_preparing">Подготовка Wi‑Fi подключения…</string>
     <string name="main_status_scanning">Поиск Windows-серверов DROPME…</string>
     <string name="main_status_network_scanning">Сканирование сети</string>
@@ -19,18 +19,18 @@
     <string name="main_status_connected_detail">Windows видит это устройство как %1$s. Сервер: %2$s:%3$d</string>
     <string name="main_status_session_closed">Windows закрыл сессию с %1$s</string>
     <string name="main_status_disconnected">Отключено</string>
-    <string name="main_status_disconnected_detail">Android-устройство больше не публикуется в приложении Windows.</string>
+    <string name="main_status_disconnected_detail">Доступ к Android-устройству в приложении Windows закрыт.</string>
     <string name="main_status_error_title">Подключение не выполнено</string>
     <string name="main_action_disconnect">Отключить</string>
     <string name="service_action_disconnect">Отключить</string>
     <string name="service_notification_channel_name">Подключение DROPME</string>
-    <string name="service_notification_channel_description">Удерживает доступ к хранилищу Android для Windows.</string>
+    <string name="service_notification_channel_description">Поддерживает доступ Windows к хранилищу Android во время подключения.</string>
     <string name="service_notification_connecting_title">DROPME подключается</string>
     <string name="service_notification_connecting_text">Подключение к %1$s и запуск WebDAV.</string>
     <string name="service_notification_connected_title">DROPME активен</string>
     <string name="service_notification_connected_text">Хранилище Android подключено к %1$s.</string>
-    <string name="main_storage_roots_title">Корни хранилища</string>
-    <string name="main_error_no_storage_roots_ready">Перед подключением к Windows откройте доступ ко всем файлам.</string>
+    <string name="main_storage_roots_title">Доступ к хранилищам</string>
+    <string name="main_error_no_storage_roots_ready">Перед подключением к Windows предоставьте доступ к хранилищу.</string>
     <string name="main_storage_access_denied">Доступ к хранилищу не предоставлен.</string>
     <string name="storage_access_granted">Доступ предоставлен</string>
     <string name="storage_access_not_granted">Доступ не предоставлен</string>
@@ -75,7 +75,7 @@
     <string name="share_error_no_files">Файлы для передачи не найдены</string>
     <string name="share_error_empty_name">Не удалось определить имя файла</string>
     <string name="share_error_large_subnet">Подсеть Wi‑Fi слишком большая для быстрого поиска сервера</string>
-    <string name="share_error_local_network_blocked">VPN запрещает передачу через локальную сеть</string>
+    <string name="share_error_local_network_blocked">VPN блокирует передачу через локальную сеть</string>
     <string name="share_error_wifi_only">Передача доступна только по Wi‑Fi</string>
     <string name="share_action_retry">Повторить</string>
     <string name="share_action_cancel">Отмена</string>
@@ -99,7 +99,7 @@
     <string name="share_file_status_uploading">Отправка…</string>
     <string name="share_file_status_success">Отправлен</string>
     <string name="share_file_status_failed">Ошибка: %1$s</string>
-    <string name="share_file_status_canceled">Отменено</string>
+    <string name="share_file_status_canceled">Отменён</string>
     <string name="share_progress_percent_and_bytes">%1$d%% • %2$s / %3$s</string>
     <string name="share_progress_bytes_only">Передано: %1$s</string>
 </resources>
