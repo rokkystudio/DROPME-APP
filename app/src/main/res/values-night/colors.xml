@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#FF111418</color>
+    <color name="surface">#FF222732</color>
+    <color name="surface_raised">#FF1D232A</color>
+    <color name="title_bar">#FF252D36</color>
+    <color name="border">#FF2A323B</color>
+    <color name="border_strong">#FF34404B</color>
+    <color name="text_primary">#FFF2F5F8</color>
+    <color name="text_secondary">#FFAEB2B6</color>
+    <color name="accent">#FF69AFED</color>
+    <color name="status_connected">#FF45C97A</color>
+    <color name="status_connecting">#FFE3A12F</color>
+    <color name="status_disconnected">#FF8D949C</color>
+    <color name="status_error">#FFE16B6B</color>
+    <color name="title_bar_button_pressed">#FF283F4D</color>
+    <color name="button_pressed">#FF1D232A</color>
+</resources>

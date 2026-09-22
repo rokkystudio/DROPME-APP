@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name">DROPME</string>
+    <string name="android_client">Android-клиент</string>
+    <string name="theme_light">Светлая тема</string>
+    <string name="theme_dark">Тёмная тема</string>
+    <string name="language_indicator">Текущий язык</string>
     <string name="main_activity_stage_one_description">Этап 1 выполняет отправку файлов из Android Share menu в Windows DROPME Server по локальной сети Wi‑Fi.</string>
     <string name="main_status_preparing">Подготовка Wi‑Fi подключения…</string>
     <string name="main_status_scanning">Поиск Windows-серверов DROPME…</string>

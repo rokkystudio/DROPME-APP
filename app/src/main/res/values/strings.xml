@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name">DROPME</string>
+    <string name="android_client">Android Client</string>
+    <string name="theme_light">Light theme</string>
+    <string name="theme_dark">Dark theme</string>
+    <string name="language_indicator">Current language</string>
     <string name="main_activity_stage_one_description">Stage 1 handles file sharing from the Android Share menu to Windows DROPME Server over the local Wi-Fi network.</string>
     <string name="main_status_preparing">Preparing Wi-Fi connection…</string>
     <string name="main_status_scanning">Searching for DROPME Windows servers…</string>

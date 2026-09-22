@@ -4,18 +4,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageButton
 import android.widget.ListView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WifiNetworkProvider
 import com.rokkystudio.dropme.network.WindowsServer
@@ -38,6 +37,9 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
 
+    private lateinit var uiSettings: UiSettings
+    private lateinit var themeToggleButton: ImageButton
+    private lateinit var languageFlag: ImageButton
     private lateinit var statusText: TextView
     private lateinit var statsText: TextView
     private lateinit var detailText: TextView
@@ -78,19 +80,28 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    override fun attachBaseContext(newBase: Context) {
+        val theme = UiSettings(newBase).getTheme()
+        val configuration = Configuration(newBase.resources.configuration)
+        val nightMode = when (theme) {
+            AppTheme.LIGHT -> Configuration.UI_MODE_NIGHT_NO
+            AppTheme.DARK -> Configuration.UI_MODE_NIGHT_YES
+        }
+        configuration.uiMode =
+            (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
+        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainRoot)) { view, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
 
+        uiSettings = UiSettings(this)
         bindViews()
         bindDependencies()
         bindActions()
+        renderThemeToggle()
+        renderLanguageFlag()
         if (ensureStorageAccessGranted()) {
             continueAfterStorageAccess()
         }
@@ -125,6 +136,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindViews() {
+        themeToggleButton = findViewById(R.id.themeToggleButton)
+        languageFlag = findViewById(R.id.languageFlag)
         statusText = findViewById(R.id.mainStatusText)
         statsText = findViewById(R.id.mainStatsText)
         detailText = findViewById(R.id.mainDetailText)
@@ -153,6 +166,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindActions() {
+        themeToggleButton.setOnClickListener {
+            toggleTheme()
+        }
         retryButton.setOnClickListener {
             startDiscoveryFlow()
         }
@@ -161,6 +177,44 @@ class MainActivity : AppCompatActivity() {
             AndroidConnectionService.stop(this)
             showDisconnected()
         }
+    }
+
+    private fun toggleTheme() {
+        val theme = when (uiSettings.getTheme()) {
+            AppTheme.LIGHT -> AppTheme.DARK
+            AppTheme.DARK -> AppTheme.LIGHT
+        }
+        uiSettings.setTheme(theme)
+        recreate()
+    }
+
+    private fun renderThemeToggle() {
+        when (uiSettings.getTheme()) {
+            AppTheme.LIGHT -> {
+                themeToggleButton.setImageResource(R.drawable.theme_sun)
+                themeToggleButton.contentDescription = getString(R.string.theme_light)
+            }
+            AppTheme.DARK -> {
+                themeToggleButton.setImageResource(R.drawable.theme_moon)
+                themeToggleButton.contentDescription = getString(R.string.theme_dark)
+            }
+        }
+    }
+
+    private fun renderLanguageFlag() {
+        val language = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            resources.configuration.locales[0]?.language
+        } else {
+            @Suppress("DEPRECATION")
+            resources.configuration.locale?.language
+        }
+        languageFlag.setImageResource(
+            if (language.equals("ru", ignoreCase = true)) {
+                R.drawable.flag_ru
+            } else {
+                R.drawable.flag_us
+            },
+        )
     }
 
     private fun continueAfterStorageAccess() {
@@ -295,9 +349,6 @@ class MainActivity : AppCompatActivity() {
         retryButton.visibility = View.GONE
         disconnectButton.visibility = View.GONE
         serverListView.visibility = if (servers.isEmpty()) View.GONE else View.VISIBLE
-        if (servers.isNotEmpty()) {
-            serverPickerScreen.show(servers)
-        }
     }
 
     private fun handleDiscoveredServers(
