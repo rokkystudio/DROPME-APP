@@ -56,10 +56,10 @@
     <string name="storage_state_needs_all_files">нужен доступ ко всем файлам</string>
     <string name="storage_state_needs_tree_grant">нужен доступ ко всем файлам</string>
     <string name="storage_state_unavailable">хранилище недоступно</string>
-    <string name="share_activity_title">DROPME</string>
+    <string name="share_activity_title">DROPME</string>\n    <string name="share_header_subtitle">Отправка файлов</string>
     <string name="share_status_preparing">Подготовка передачи…</string>
     <string name="share_status_scanning">Поиск Windows-серверов DROPME…</string>
-    <string name="share_status_select_server">Выберите Windows-сервер</string>
+    <string name="share_status_select_server">Выберите Windows-сервер</string>\n    <string name="share_status_select_server_detail_none">Найденные серверы появятся здесь автоматически.</string>
     <string name="share_status_select_server_detail_single">Нажмите на устройство, чтобы отправить файлы.</string>
     <string name="share_status_select_server_detail_multiple">Нажмите на устройство, чтобы отправить файлы. Найдено: %1$d.</string>
     <string name="share_status_uploading">Отправка файлов на %1$s…</string>

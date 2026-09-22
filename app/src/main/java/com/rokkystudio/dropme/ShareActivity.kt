@@ -2,10 +2,14 @@ package com.rokkystudio.dropme
 
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -13,6 +17,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -22,6 +27,7 @@ import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WindowsUploadClient
 import com.rokkystudio.dropme.storage.SharedFileReader
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -54,13 +60,18 @@ class ShareActivity : AppCompatActivity() {
         val progressTextView: TextView,
     )
 
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val scanExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val uploadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val scanHandler = Handler(Looper.getMainLooper())
 
     private lateinit var statusText: TextView
     private lateinit var detailText: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var progressSummaryText: TextView
-    private lateinit var serverListTitle: TextView
+    private lateinit var themeToggleButton: ImageButton
+    private lateinit var languageFlag: ImageButton
+    private lateinit var serverPanel: LinearLayout
+    private lateinit var noServersText: TextView
     private lateinit var serverListContainer: LinearLayout
     private lateinit var fileListTitle: TextView
     private lateinit var fileListContainer: LinearLayout
@@ -72,16 +83,30 @@ class ShareActivity : AppCompatActivity() {
     private lateinit var sharedFileReader: SharedFileReader
     private lateinit var windowsUploadClient: WindowsUploadClient
     private lateinit var serverPickerScreen: ShareServerPickerScreen
+    private lateinit var uiSettings: UiSettings
 
     private var sharedFiles: List<SharedFileReader.SharedFile> = emptyList()
     private var lastWifiInfo: WifiNetworkProvider.WifiNetworkInfo? = null
+    private var discoveredServers: List<WindowsServer> = emptyList()
     private val layoutInflaterInstance by lazy { LayoutInflater.from(this) }
     private val fileItems = linkedMapOf<SharedFileReader.SharedFile, FileTransferUiItem>()
     private val fileRowViews = linkedMapOf<SharedFileReader.SharedFile, FileRowViews>()
 
     @Volatile
     private var cancelRequested = false
+
+    @Volatile
+    private var activityStarted = false
+
+    @Volatile
+    private var scanInProgress = false
+
+    private var sharePrepared = false
     private var isUploadInProgress = false
+
+    private val nextScanRunnable = Runnable {
+        startNetworkScan()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,11 +131,29 @@ class ShareActivity : AppCompatActivity() {
         bindViews()
         bindDependencies()
         bindActions()
+        renderThemeToggle()
+        renderLanguageFlag()
         startShareFlow()
     }
 
+    override fun onStart() {
+        super.onStart()
+        activityStarted = true
+        if (sharePrepared) {
+            startScanLoop()
+        }
+    }
+
+    override fun onStop() {
+        activityStarted = false
+        scanHandler.removeCallbacks(nextScanRunnable)
+        super.onStop()
+    }
+
     override fun onDestroy() {
-        executor.shutdownNow()
+        scanHandler.removeCallbacksAndMessages(null)
+        scanExecutor.shutdownNow()
+        uploadExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -119,7 +162,10 @@ class ShareActivity : AppCompatActivity() {
         detailText = findViewById(R.id.shareDetailText)
         progressBar = findViewById(R.id.shareProgressBar)
         progressSummaryText = findViewById(R.id.shareProgressSummaryText)
-        serverListTitle = findViewById(R.id.shareServerListTitle)
+        themeToggleButton = findViewById(R.id.themeToggleButton)
+        languageFlag = findViewById(R.id.languageFlag)
+        serverPanel = findViewById(R.id.shareServerPanel)
+        noServersText = findViewById(R.id.shareNoServersText)
         serverListContainer = findViewById(R.id.shareServerListContainer)
         fileListTitle = findViewById(R.id.shareFileListTitle)
         fileListContainer = findViewById(R.id.shareFileListContainer)
@@ -128,6 +174,7 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private fun bindDependencies() {
+        uiSettings = UiSettings(this)
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
         wifiDropScanner = WindowsServerScanner()
         sharedFileReader = SharedFileReader(applicationContext)
@@ -140,6 +187,9 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private fun bindActions() {
+        themeToggleButton.setOnClickListener {
+            toggleTheme()
+        }
         retryButton.setOnClickListener {
             startShareFlow()
         }
@@ -152,30 +202,72 @@ class ShareActivity : AppCompatActivity() {
         }
     }
 
+    private fun toggleTheme() {
+        val theme = when (uiSettings.getTheme()) {
+            AppTheme.LIGHT -> AppTheme.DARK
+            AppTheme.DARK -> AppTheme.LIGHT
+        }
+        uiSettings.setTheme(theme)
+        AppCompatDelegate.setDefaultNightMode(
+            when (theme) {
+                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            },
+        )
+    }
+
+    private fun renderThemeToggle() {
+        when (uiSettings.getTheme()) {
+            AppTheme.LIGHT -> {
+                themeToggleButton.setImageResource(R.drawable.theme_sun)
+                themeToggleButton.contentDescription = getString(R.string.theme_light)
+            }
+
+            AppTheme.DARK -> {
+                themeToggleButton.setImageResource(R.drawable.theme_moon)
+                themeToggleButton.contentDescription = getString(R.string.theme_dark)
+            }
+        }
+    }
+
+    private fun renderLanguageFlag() {
+        val language = Locale.getDefault().language
+        languageFlag.setImageResource(
+            if (language.equals("ru", ignoreCase = true)) {
+                R.drawable.flag_ru
+            } else {
+                R.drawable.flag_us
+            },
+        )
+    }
+
     private fun startShareFlow() {
         cancelRequested = false
         isUploadInProgress = false
+        sharePrepared = false
+        discoveredServers = emptyList()
+        lastWifiInfo = null
+        scanHandler.removeCallbacks(nextScanRunnable)
         closeButton.isEnabled = true
         closeButton.setText(R.string.share_action_close)
         retryButton.visibility = View.GONE
         closeButton.visibility = View.GONE
+        serverPanel.visibility = View.GONE
         serverListContainer.removeAllViews()
         renderFileItems(emptyList())
         showLoading(getString(R.string.share_status_preparing), null)
-        executor.execute {
+
+        uploadExecutor.execute {
             try {
-                sharedFiles = sharedFileReader.readFromIntent(intent)
+                val files = sharedFileReader.readFromIntent(intent)
                 runOnUiThread {
-                    renderFileItems(sharedFiles.map(::pendingFileItem))
-                }
-                val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
-                lastWifiInfo = wifiInfo
-                runOnUiThread {
-                    showLoading(getString(R.string.share_status_scanning), null)
-                }
-                val servers = wifiDropScanner.scan(wifiInfo)
-                runOnUiThread {
-                    handleDiscoveredServers(servers)
+                    sharedFiles = files
+                    renderFileItems(files.map(::pendingFileItem))
+                    sharePrepared = true
+                    showServerSelectionState()
+                    if (activityStarted) {
+                        startScanLoop()
+                    }
                 }
             } catch (throwable: Throwable) {
                 val error = throwable.toAppError(
@@ -188,27 +280,125 @@ class ShareActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleDiscoveredServers(servers: List<WindowsServer>) {
-        if (servers.isEmpty()) {
-            handleError(AppError.ServerNotFound)
+    private fun startScanLoop() {
+        scanHandler.removeCallbacks(nextScanRunnable)
+        startNetworkScan()
+    }
+
+    private fun startNetworkScan() {
+        if (!activityStarted || !sharePrepared || scanInProgress) {
             return
         }
 
-        statusText.text = getString(R.string.share_status_select_server)
-        detailText.text = if (servers.size == 1) {
-            getString(R.string.share_status_select_server_detail_single)
-        } else {
-            getString(R.string.share_status_select_server_detail_multiple, servers.size)
+        scanInProgress = true
+        val startedAt = SystemClock.elapsedRealtime()
+
+        scanExecutor.execute {
+            try {
+                val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
+                lastWifiInfo = wifiInfo
+                wifiDropScanner.scan(
+                    wifiInfo = wifiInfo,
+                    onServerFound = { servers ->
+                        runOnUiThread {
+                            if (activityStarted) {
+                                mergeDiscoveredServers(servers)
+                            }
+                        }
+                    },
+                    shouldContinue = {
+                        activityStarted && !Thread.currentThread().isInterrupted
+                    },
+                ).also { servers ->
+                    runOnUiThread {
+                        if (activityStarted) {
+                            mergeDiscoveredServers(servers)
+                        }
+                    }
+                }
+            } catch (throwable: Throwable) {
+                val error = throwable.toAppError(
+                    AppError.UnknownError(getString(R.string.share_status_error_title)),
+                )
+                runOnUiThread {
+                    if (activityStarted && !isUploadInProgress) {
+                        renderScanError(error)
+                    }
+                }
+            } finally {
+                scanInProgress = false
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                val delay = (SCAN_INTERVAL_MS - elapsed).coerceAtLeast(0L)
+                runOnUiThread {
+                    if (activityStarted && sharePrepared) {
+                        scanHandler.removeCallbacks(nextScanRunnable)
+                        scanHandler.postDelayed(nextScanRunnable, delay)
+                    }
+                }
+            }
         }
+    }
+
+    private fun mergeDiscoveredServers(servers: List<WindowsServer>) {
+        if (servers.isEmpty()) {
+            return
+        }
+
+        val merged = LinkedHashMap<String, WindowsServer>()
+        discoveredServers.forEach { server ->
+            merged[serverKey(server)] = server
+        }
+        servers.forEach { server ->
+            merged[serverKey(server)] = server
+        }
+        val updated = merged.values.sortedWith(
+            compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
+        )
+        if (updated != discoveredServers) {
+            discoveredServers = updated
+            renderServerList()
+        }
+    }
+
+    private fun serverKey(server: WindowsServer): String =
+        server.host + ":" + server.tcpPort
+
+    private fun showServerSelectionState() {
+        statusText.text = getString(R.string.share_status_select_server)
         progressBar.visibility = View.GONE
         progressSummaryText.visibility = View.GONE
         retryButton.visibility = View.GONE
         closeButton.visibility = View.VISIBLE
         closeButton.isEnabled = true
         closeButton.setText(R.string.share_action_close)
-        serverListTitle.visibility = View.VISIBLE
-        serverListContainer.visibility = View.VISIBLE
-        serverPickerScreen.show(servers)
+        serverPanel.visibility = View.VISIBLE
+        renderServerList()
+    }
+
+    private fun renderServerList() {
+        if (isUploadInProgress) {
+            return
+        }
+
+        val hasServers = discoveredServers.isNotEmpty()
+        serverPickerScreen.show(discoveredServers)
+        serverPanel.visibility = View.VISIBLE
+        serverListContainer.visibility = if (hasServers) View.VISIBLE else View.GONE
+        noServersText.visibility = if (hasServers) View.GONE else View.VISIBLE
+        detailText.text = when {
+            !hasServers -> getString(R.string.share_status_select_server_detail_none)
+            discoveredServers.size == 1 -> getString(R.string.share_status_select_server_detail_single)
+            else -> getString(R.string.share_status_select_server_detail_multiple, discoveredServers.size)
+        }
+    }
+
+    private fun renderScanError(error: AppError) {
+        serverPanel.visibility = View.VISIBLE
+        if (discoveredServers.isEmpty()) {
+            noServersText.visibility = View.VISIBLE
+            serverListContainer.visibility = View.GONE
+            detailText.text = error.toUserMessage(this)
+        }
     }
 
     private fun uploadToServer(server: WindowsServer) {
@@ -223,7 +413,7 @@ class ShareActivity : AppCompatActivity() {
             getString(R.string.share_status_uploading, server.deviceName),
             getString(R.string.share_status_uploading_detail, server.host, server.tcpPort),
         )
-        executor.execute {
+        uploadExecutor.execute {
             try {
                 val results = windowsUploadClient.uploadFiles(
                     wifiInfo = wifiInfo,
@@ -282,7 +472,8 @@ class ShareActivity : AppCompatActivity() {
                 detailText.text = error.toUserMessage(this)
                 progressBar.visibility = View.GONE
                 progressSummaryText.visibility = View.GONE
-                serverListTitle.visibility = View.GONE
+                serverPanel.visibility = View.GONE
+        noServersText.visibility = View.GONE
                 serverListContainer.visibility = View.GONE
                 retryButton.visibility = if (error == AppError.ServerNotFound) View.VISIBLE else View.GONE
                 closeButton.visibility = View.VISIBLE
@@ -296,7 +487,8 @@ class ShareActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         progressBar.isIndeterminate = true
         progressSummaryText.visibility = View.GONE
-        serverListTitle.visibility = View.GONE
+        serverPanel.visibility = View.GONE
+        noServersText.visibility = View.GONE
         serverListContainer.visibility = View.GONE
         retryButton.visibility = View.GONE
         closeButton.visibility = View.GONE
@@ -363,7 +555,8 @@ class ShareActivity : AppCompatActivity() {
         }
         progressBar.visibility = View.GONE
         progressSummaryText.visibility = View.GONE
-        serverListTitle.visibility = View.GONE
+        serverPanel.visibility = View.GONE
+        noServersText.visibility = View.GONE
         serverListContainer.visibility = View.GONE
         retryButton.visibility = View.GONE
         closeButton.visibility = View.VISIBLE
@@ -563,5 +756,6 @@ class ShareActivity : AppCompatActivity() {
 
     private companion object {
         const val MAX_PROGRESS = 100
+        const val SCAN_INTERVAL_MS = 10_000L
     }
 }

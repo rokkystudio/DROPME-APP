@@ -56,10 +56,10 @@
     <string name="storage_state_needs_all_files">grant all files access</string>
     <string name="storage_state_needs_tree_grant">grant all files access</string>
     <string name="storage_state_unavailable">storage is unavailable</string>
-    <string name="share_activity_title">DROPME</string>
+    <string name="share_activity_title">DROPME</string>\n    <string name="share_header_subtitle">File transfer</string>
     <string name="share_status_preparing">Preparing transfer…</string>
     <string name="share_status_scanning">Searching for DROPME Windows servers…</string>
-    <string name="share_status_select_server">Select a Windows server</string>
+    <string name="share_status_select_server">Select a Windows server</string>\n    <string name="share_status_select_server_detail_none">Servers will appear here automatically when discovered.</string>
     <string name="share_status_select_server_detail_single">Tap the device to send files.</string>
     <string name="share_status_select_server_detail_multiple">Tap the device to send files. Found: %1$d.</string>
     <string name="share_status_uploading">Uploading files to %1$s…</string>
