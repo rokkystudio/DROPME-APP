@@ -15,9 +15,11 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -71,6 +73,9 @@ class ShareActivity : AppCompatActivity() {
     private lateinit var themeToggleButton: ImageButton
     private lateinit var languageFlag: ImageButton
     private lateinit var serverPanel: LinearLayout
+    private lateinit var selectedServerPanel: LinearLayout
+    private lateinit var selectedServerName: TextView
+    private lateinit var selectedServerAddress: TextView
     private lateinit var noServersText: TextView
     private lateinit var serverListContainer: LinearLayout
     private lateinit var fileListTitle: TextView
@@ -88,6 +93,7 @@ class ShareActivity : AppCompatActivity() {
     private var sharedFiles: List<SharedFileReader.SharedFile> = emptyList()
     private var lastWifiInfo: WifiNetworkProvider.WifiNetworkInfo? = null
     private var discoveredServers: List<WindowsServer> = emptyList()
+    private var selectedServer: WindowsServer? = null
     private val layoutInflaterInstance by lazy { LayoutInflater.from(this) }
     private val fileItems = linkedMapOf<SharedFileReader.SharedFile, FileTransferUiItem>()
     private val fileRowViews = linkedMapOf<SharedFileReader.SharedFile, FileRowViews>()
@@ -103,6 +109,7 @@ class ShareActivity : AppCompatActivity() {
 
     private var sharePrepared = false
     private var isUploadInProgress = false
+    private var finishAfterCancellation = false
 
     private val nextScanRunnable = Runnable {
         startNetworkScan()
@@ -133,6 +140,7 @@ class ShareActivity : AppCompatActivity() {
         bindActions()
         renderThemeToggle()
         renderLanguageFlag()
+        bindBackNavigation()
         startShareFlow()
     }
 
@@ -165,6 +173,9 @@ class ShareActivity : AppCompatActivity() {
         themeToggleButton = findViewById(R.id.themeToggleButton)
         languageFlag = findViewById(R.id.languageFlag)
         serverPanel = findViewById(R.id.shareServerPanel)
+        selectedServerPanel = findViewById(R.id.shareSelectedServerPanel)
+        selectedServerName = findViewById(R.id.shareSelectedServerName)
+        selectedServerAddress = findViewById(R.id.shareSelectedServerAddress)
         noServersText = findViewById(R.id.shareNoServersText)
         serverListContainer = findViewById(R.id.shareServerListContainer)
         fileListTitle = findViewById(R.id.shareFileListTitle)
@@ -194,12 +205,46 @@ class ShareActivity : AppCompatActivity() {
             startShareFlow()
         }
         closeButton.setOnClickListener {
-            if (isUploadInProgress) {
-                requestUploadCancellation()
-            } else {
-                finish()
-            }
+            requestClose()
         }
+    }
+
+    private fun bindBackNavigation() {
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    requestClose()
+                }
+            },
+        )
+    }
+
+    private fun requestClose() {
+        if (!isUploadInProgress) {
+            finish()
+            return
+        }
+        if (!cancelRequested) {
+            showCloseConfirmation()
+        }
+    }
+
+    private fun showCloseConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.share_close_confirm_title)
+            .setMessage(R.string.share_close_confirm_message)
+            .setNegativeButton(R.string.share_close_confirm_keep) { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setPositiveButton(R.string.share_close_confirm_cancel) { _, _ ->
+                if (isUploadInProgress) {
+                    requestUploadCancellation(closeWhenStopped = true)
+                } else {
+                    finish()
+                }
+            }
+            .show()
     }
 
     private fun toggleTheme() {
@@ -244,18 +289,24 @@ class ShareActivity : AppCompatActivity() {
     private fun startShareFlow() {
         cancelRequested = false
         isUploadInProgress = false
+        finishAfterCancellation = false
         sharePrepared = false
         discoveredServers = emptyList()
+        selectedServer = null
         lastWifiInfo = null
         scanHandler.removeCallbacks(nextScanRunnable)
         closeButton.isEnabled = true
         closeButton.setText(R.string.share_action_close)
+        closeButton.visibility = View.VISIBLE
         retryButton.visibility = View.GONE
-        closeButton.visibility = View.GONE
-        serverPanel.visibility = View.GONE
+        selectedServerPanel.visibility = View.GONE
+        serverPanel.visibility = View.VISIBLE
+        noServersText.visibility = View.GONE
+        serverListContainer.visibility = View.GONE
         serverListContainer.removeAllViews()
+        progressBar.visibility = View.GONE
+        progressSummaryText.visibility = View.GONE
         renderFileItems(emptyList())
-        showLoading(getString(R.string.share_status_preparing), null)
 
         uploadExecutor.execute {
             try {
@@ -364,7 +415,8 @@ class ShareActivity : AppCompatActivity() {
         server.host + ":" + server.tcpPort
 
     private fun showServerSelectionState() {
-        statusText.text = getString(R.string.share_status_select_server)
+        selectedServer = null
+        selectedServerPanel.visibility = View.GONE
         progressBar.visibility = View.GONE
         progressSummaryText.visibility = View.GONE
         retryButton.visibility = View.GONE
@@ -376,7 +428,7 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private fun renderServerList() {
-        if (isUploadInProgress) {
+        if (isUploadInProgress || selectedServer != null) {
             return
         }
 
@@ -385,19 +437,18 @@ class ShareActivity : AppCompatActivity() {
         serverPanel.visibility = View.VISIBLE
         serverListContainer.visibility = if (hasServers) View.VISIBLE else View.GONE
         noServersText.visibility = if (hasServers) View.GONE else View.VISIBLE
-        detailText.text = when {
-            !hasServers -> getString(R.string.share_status_select_server_detail_none)
-            discoveredServers.size == 1 -> getString(R.string.share_status_select_server_detail_single)
-            else -> getString(R.string.share_status_select_server_detail_multiple, discoveredServers.size)
-        }
+        // The selection card itself carries all discovery state; no duplicate status text is needed.
     }
 
     private fun renderScanError(error: AppError) {
+        if (selectedServer != null) {
+            return
+        }
         serverPanel.visibility = View.VISIBLE
         if (discoveredServers.isEmpty()) {
             noServersText.visibility = View.VISIBLE
             serverListContainer.visibility = View.GONE
-            detailText.text = error.toUserMessage(this)
+            noServersText.text = error.toUserMessage(this)
         }
     }
 
@@ -408,10 +459,15 @@ class ShareActivity : AppCompatActivity() {
             return
         }
 
+        selectedServer = server
+        serverPanel.visibility = View.GONE
+        selectedServerPanel.visibility = View.VISIBLE
+        selectedServerName.text = server.deviceName
+        selectedServerAddress.text = getString(R.string.share_status_uploading_detail, server.host, server.tcpPort)
         renderFileItems(sharedFiles.map(::pendingFileItem))
         showUploadLoading(
-            getString(R.string.share_status_uploading, server.deviceName),
-            getString(R.string.share_status_uploading_detail, server.host, server.tcpPort),
+            getString(R.string.share_status_uploading),
+            null,
         )
         uploadExecutor.execute {
             try {
@@ -468,22 +524,34 @@ class ShareActivity : AppCompatActivity() {
             }
 
             else -> {
-                statusText.text = getString(R.string.share_status_error_title)
-                detailText.text = error.toUserMessage(this)
                 progressBar.visibility = View.GONE
                 progressSummaryText.visibility = View.GONE
-                serverPanel.visibility = View.GONE
-        noServersText.visibility = View.GONE
-                serverListContainer.visibility = View.GONE
                 retryButton.visibility = if (error == AppError.ServerNotFound) View.VISIBLE else View.GONE
                 closeButton.visibility = View.VISIBLE
+                if (selectedServer == null) {
+                    selectedServerPanel.visibility = View.GONE
+                    serverPanel.visibility = View.VISIBLE
+                    serverListContainer.visibility = View.GONE
+                    noServersText.visibility = View.VISIBLE
+                    noServersText.text = error.toUserMessage(this)
+                } else {
+                    serverPanel.visibility = View.GONE
+                    noServersText.visibility = View.GONE
+                    serverListContainer.visibility = View.GONE
+                    selectedServerPanel.visibility = View.VISIBLE
+                    statusText.text = getString(R.string.share_status_error_title)
+                    detailText.visibility = View.VISIBLE
+                    detailText.text = error.toUserMessage(this)
+                }
             }
         }
     }
 
     private fun showLoading(status: String, detail: String?) {
         statusText.text = status
-        detailText.text = detail
+        detailText.text = detail.orEmpty()
+        detailText.visibility = if (detail.isNullOrBlank()) View.GONE else View.VISIBLE
+        selectedServerPanel.visibility = View.VISIBLE
         progressBar.visibility = View.VISIBLE
         progressBar.isIndeterminate = true
         progressSummaryText.visibility = View.GONE
@@ -491,7 +559,7 @@ class ShareActivity : AppCompatActivity() {
         noServersText.visibility = View.GONE
         serverListContainer.visibility = View.GONE
         retryButton.visibility = View.GONE
-        closeButton.visibility = View.GONE
+        closeButton.visibility = View.VISIBLE
     }
 
     private fun showUploadLoading(status: String, detail: String?) {
@@ -510,7 +578,7 @@ class ShareActivity : AppCompatActivity() {
         renderOverallProgress(0L, totalUploadBytes())
         closeButton.visibility = View.VISIBLE
         closeButton.isEnabled = true
-        closeButton.setText(R.string.share_action_cancel)
+        closeButton.setText(R.string.share_action_close)
     }
 
     private fun showUploadProgress(progress: WindowsUploadClient.UploadProgress) {
@@ -534,6 +602,9 @@ class ShareActivity : AppCompatActivity() {
         closeButton.isEnabled = true
         closeButton.setText(R.string.share_action_close)
 
+        val shouldFinish = finishAfterCancellation
+        finishAfterCancellation = false
+
         val successCount = results.count { it.status == WindowsUploadClient.UploadStatus.SUCCESS }
         val failureCount = results.count { it.status == WindowsUploadClient.UploadStatus.FAILED }
         val canceledCount = results.count { it.status == WindowsUploadClient.UploadStatus.CANCELED }
@@ -545,6 +616,7 @@ class ShareActivity : AppCompatActivity() {
             successCount == 0 -> getString(R.string.share_status_completed_failed)
             else -> getString(R.string.share_status_completed_partial)
         }
+        detailText.visibility = View.VISIBLE
         detailText.text = when {
             canceledCount > 0 -> getString(
                 R.string.share_result_summary_canceled,
@@ -571,7 +643,11 @@ class ShareActivity : AppCompatActivity() {
             successCount == 0 -> getString(R.string.share_result_all_failed)
             else -> getString(R.string.share_result_partial, successCount, failureCount)
         }
-        Toast.makeText(this, toastMessage, Toast.LENGTH_LONG).show()
+        if (shouldFinish) {
+            finish()
+        } else {
+            Toast.makeText(this, toastMessage, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun renderFileItems(items: List<FileTransferUiItem>) {
@@ -730,11 +806,13 @@ class ShareActivity : AppCompatActivity() {
         return fileItems[file]?.transferredBytes ?: 0L
     }
 
-    private fun requestUploadCancellation() {
+    private fun requestUploadCancellation(closeWhenStopped: Boolean) {
         if (!isUploadInProgress || cancelRequested) {
             return
         }
         cancelRequested = true
+        finishAfterCancellation = closeWhenStopped
+        detailText.visibility = View.VISIBLE
         detailText.text = getString(R.string.share_status_cancel_pending)
         closeButton.isEnabled = false
         closeButton.setText(R.string.share_action_stopping)

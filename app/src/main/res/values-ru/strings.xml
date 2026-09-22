@@ -56,13 +56,10 @@
     <string name="storage_state_needs_all_files">нужен доступ ко всем файлам</string>
     <string name="storage_state_needs_tree_grant">нужен доступ ко всем файлам</string>
     <string name="storage_state_unavailable">хранилище недоступно</string>
-    <string name="share_activity_title">DROPME</string>\n    <string name="share_header_subtitle">Отправка файлов</string>
-    <string name="share_status_preparing">Подготовка передачи…</string>
-    <string name="share_status_scanning">Поиск Windows-серверов DROPME…</string>
-    <string name="share_status_select_server">Выберите Windows-сервер</string>\n    <string name="share_status_select_server_detail_none">Найденные серверы появятся здесь автоматически.</string>
-    <string name="share_status_select_server_detail_single">Нажмите на устройство, чтобы отправить файлы.</string>
-    <string name="share_status_select_server_detail_multiple">Нажмите на устройство, чтобы отправить файлы. Найдено: %1$d.</string>
-    <string name="share_status_uploading">Отправка файлов на %1$s…</string>
+    <string name="share_activity_title">DROPME</string>
+    <string name="share_header_subtitle">Отправка файлов</string>
+    <string name="share_status_select_server">Выберите Windows сервер</string>
+    <string name="share_status_uploading">Отправка файлов…</string>
     <string name="share_status_uploading_detail">%1$s:%2$d</string>
     <string name="share_status_error_title">Передача не выполнена</string>
     <string name="share_status_completed_success">Передача завершена</string>
@@ -78,9 +75,13 @@
     <string name="share_error_local_network_blocked">VPN блокирует передачу через локальную сеть</string>
     <string name="share_error_wifi_only">Передача доступна только по Wi‑Fi</string>
     <string name="share_action_retry">Повторить</string>
-    <string name="share_action_cancel">Отмена</string>
     <string name="share_action_stopping">Остановка…</string>
     <string name="share_action_close">Закрыть</string>
+    <string name="share_selected_server_title">Выбран сервер</string>
+    <string name="share_close_confirm_title">Отменить передачу?</string>
+    <string name="share_close_confirm_message">Передача файлов ещё выполняется. Закрыть DROPME и остановить передачу после текущего файла? Уже отправленные файлы останутся на сервере.</string>
+    <string name="share_close_confirm_keep">Продолжить передачу</string>
+    <string name="share_close_confirm_cancel">Закрыть и отменить</string>
     <string name="share_result_single">Файл отправлен</string>
     <string name="share_result_multiple">Отправлено файлов: %1$d</string>
     <string name="share_result_all_success">Все файлы отправлены</string>
@@ -91,7 +92,6 @@
     <string name="share_result_summary_partial">Отправлено на %1$s. Ошибок: %2$d.</string>
     <string name="share_result_summary_failed">Не удалось отправить на %1$s.</string>
     <string name="share_result_summary_canceled">Отправлено на %1$s. Отправлено: %2$d, отменено: %3$d.</string>
-    <string name="share_section_devices">Устройства</string>
     <string name="share_section_files">Файлы</string>
     <string name="share_server_row_title">%1$s</string>
     <string name="share_server_row_subtitle">%1$s:%2$d</string>

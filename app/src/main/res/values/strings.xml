@@ -56,13 +56,10 @@
     <string name="storage_state_needs_all_files">grant all files access</string>
     <string name="storage_state_needs_tree_grant">grant all files access</string>
     <string name="storage_state_unavailable">storage is unavailable</string>
-    <string name="share_activity_title">DROPME</string>\n    <string name="share_header_subtitle">File transfer</string>
-    <string name="share_status_preparing">Preparing transfer…</string>
-    <string name="share_status_scanning">Searching for DROPME Windows servers…</string>
-    <string name="share_status_select_server">Select a Windows server</string>\n    <string name="share_status_select_server_detail_none">Servers will appear here automatically when discovered.</string>
-    <string name="share_status_select_server_detail_single">Tap the device to send files.</string>
-    <string name="share_status_select_server_detail_multiple">Tap the device to send files. Found: %1$d.</string>
-    <string name="share_status_uploading">Uploading files to %1$s…</string>
+    <string name="share_activity_title">DROPME</string>
+    <string name="share_header_subtitle">File transfer</string>
+    <string name="share_status_select_server">Select Windows server</string>
+    <string name="share_status_uploading">Sending files…</string>
     <string name="share_status_uploading_detail">%1$s:%2$d</string>
     <string name="share_status_error_title">Transfer failed</string>
     <string name="share_status_completed_success">Transfer completed</string>
@@ -78,9 +75,13 @@
     <string name="share_error_local_network_blocked">VPN is blocking transfers over the local network</string>
     <string name="share_error_wifi_only">Transfer is available only over Wi-Fi</string>
     <string name="share_action_retry">Retry</string>
-    <string name="share_action_cancel">Cancel</string>
     <string name="share_action_stopping">Stopping…</string>
     <string name="share_action_close">Close</string>
+    <string name="share_selected_server_title">Selected server</string>
+    <string name="share_close_confirm_title">Cancel file transfer?</string>
+    <string name="share_close_confirm_message">Files are still being sent. Close DROPME and stop the transfer after the current file? Files already sent will remain on the server.</string>
+    <string name="share_close_confirm_keep">Continue transfer</string>
+    <string name="share_close_confirm_cancel">Close and cancel</string>
     <string name="share_result_single">File sent</string>
     <string name="share_result_multiple">Files sent: %1$d</string>
     <string name="share_result_all_success">All files were sent</string>
@@ -91,7 +92,6 @@
     <string name="share_result_summary_partial">Sent to %1$s. Failed: %2$d.</string>
     <string name="share_result_summary_failed">Could not send to %1$s.</string>
     <string name="share_result_summary_canceled">Sent to %1$s. Sent: %2$d, canceled: %3$d.</string>
-    <string name="share_section_devices">Devices</string>
     <string name="share_section_files">Files</string>
     <string name="share_server_row_title">%1$s</string>
     <string name="share_server_row_subtitle">%1$s:%2$d</string>
