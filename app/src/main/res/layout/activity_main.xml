@@ -80,6 +80,7 @@
             android:textColor="@color/text_primary"
             android:textSize="15sp"
             android:textStyle="bold"
+            android:backgroundTint="@null"
             android:visibility="gone" />
     </LinearLayout>
 
