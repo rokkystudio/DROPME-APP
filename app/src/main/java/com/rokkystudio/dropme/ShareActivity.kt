@@ -9,7 +9,6 @@ import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -19,6 +18,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -29,7 +29,9 @@ import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WindowsUploadClient
 import com.rokkystudio.dropme.storage.SharedFileReader
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
-import java.util.Locale
+import com.rokkystudio.sharedapp.neoui.NeoLanguageDefaults
+import com.rokkystudio.sharedapp.neoui.NeoThemeDefaults
+import com.rokkystudio.sharedapp.neoui.NeoTopBarView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -70,8 +72,7 @@ class ShareActivity : AppCompatActivity() {
     private lateinit var detailText: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var progressSummaryText: TextView
-    private lateinit var themeToggleButton: ImageButton
-    private lateinit var languageFlag: ImageButton
+    private lateinit var neoTopBar: NeoTopBarView
     private lateinit var serverPanel: LinearLayout
     private lateinit var selectedServerPanel: LinearLayout
     private lateinit var selectedServerName: TextView
@@ -170,8 +171,7 @@ class ShareActivity : AppCompatActivity() {
         detailText = findViewById(R.id.shareDetailText)
         progressBar = findViewById(R.id.shareProgressBar)
         progressSummaryText = findViewById(R.id.shareProgressSummaryText)
-        themeToggleButton = findViewById(R.id.themeToggleButton)
-        languageFlag = findViewById(R.id.languageFlag)
+        neoTopBar = findViewById(R.id.neoTopBar)
         serverPanel = findViewById(R.id.shareServerPanel)
         selectedServerPanel = findViewById(R.id.shareSelectedServerPanel)
         selectedServerName = findViewById(R.id.shareSelectedServerName)
@@ -198,9 +198,6 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private fun bindActions() {
-        themeToggleButton.setOnClickListener {
-            toggleTheme()
-        }
         retryButton.setOnClickListener {
             startShareFlow()
         }
@@ -248,40 +245,67 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private fun toggleTheme() {
-        val theme = when (uiSettings.getTheme()) {
-            AppTheme.LIGHT -> AppTheme.DARK
-            AppTheme.DARK -> AppTheme.LIGHT
-        }
-        uiSettings.setTheme(theme)
-        AppCompatDelegate.setDefaultNightMode(
-            when (theme) {
-                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+        applyNeoTheme(
+            when (uiSettings.getTheme()) {
+                AppTheme.LIGHT -> NeoThemeDefaults.NIGHT
+                AppTheme.DARK -> NeoThemeDefaults.DAY
             },
         )
     }
 
     private fun renderThemeToggle() {
-        when (uiSettings.getTheme()) {
-            AppTheme.LIGHT -> {
-                themeToggleButton.setImageResource(R.drawable.theme_sun)
-                themeToggleButton.contentDescription = getString(R.string.theme_light)
-            }
-
-            AppTheme.DARK -> {
-                themeToggleButton.setImageResource(R.drawable.theme_moon)
-                themeToggleButton.contentDescription = getString(R.string.theme_dark)
-            }
-        }
+        neoTopBar.setAppInfo(
+            title = getString(R.string.app_name),
+            subtitle = getString(R.string.share_header_subtitle),
+            version = BuildConfig.VERSION_NAME,
+            iconResId = R.mipmap.ic_launcher,
+        )
+        neoTopBar.setThemeOptions(
+            options = NeoThemeDefaults.dayNight(),
+            selected = selectedNeoTheme(),
+            onSelected = ::applyNeoTheme,
+        )
     }
 
     private fun renderLanguageFlag() {
-        val language = Locale.getDefault().language
-        languageFlag.setImageResource(
-            if (language.equals("ru", ignoreCase = true)) {
-                R.drawable.flag_ru
-            } else {
-                R.drawable.flag_us
+        neoTopBar.setLanguageOptions(
+            options = NeoLanguageDefaults.supportedLanguages(),
+            selected = uiSettings.getLanguage(),
+            onSelected = ::applyNeoLanguage,
+        )
+    }
+
+    private fun applyNeoLanguage(language: String) {
+        if (uiSettings.getLanguage() == language) {
+            return
+        }
+        uiSettings.setLanguage(language)
+        AppCompatDelegate.setApplicationLocales(
+            LocaleListCompat.forLanguageTags(language),
+        )
+    }
+
+    private fun selectedNeoTheme(): String {
+        return when (uiSettings.getTheme()) {
+            AppTheme.LIGHT -> NeoThemeDefaults.DAY
+            AppTheme.DARK -> NeoThemeDefaults.NIGHT
+        }
+    }
+
+    private fun applyNeoTheme(theme: String) {
+        val appTheme = when (theme) {
+            NeoThemeDefaults.DAY -> AppTheme.LIGHT
+            NeoThemeDefaults.NIGHT -> AppTheme.DARK
+            else -> return
+        }
+        if (uiSettings.getTheme() == appTheme) {
+            return
+        }
+        uiSettings.setTheme(appTheme)
+        AppCompatDelegate.setDefaultNightMode(
+            when (appTheme) {
+                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
             },
         )
     }

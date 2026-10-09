@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">DROPME</string>
-    <string name="android_client">Android Client</string>
+    <string name="android_client">File transfer</string>
     <string name="theme_light">Light theme</string>
     <string name="theme_dark">Dark theme</string>
     <string name="language_indicator">Current language</string>

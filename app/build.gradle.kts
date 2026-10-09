@@ -12,8 +12,12 @@ android {
         applicationId = "com.rokkystudio.dropme"
         minSdk = 26
         targetSdk = 37
-        versionCode = 45
-        versionName = "1.0.45"
+        versionCode = 110
+        versionName = "1.1.0"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {
@@ -30,6 +34,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":neoui"))
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)

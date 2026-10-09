@@ -1,9 +1,10 @@
 package com.rokkystudio.dropme
 
 import android.content.Context
+import com.rokkystudio.sharedapp.neoui.NeoLanguageDefaults
 
 /**
- * Хранит выбранную пользователем тему интерфейса DROPME.
+ * Хранит выбранные пользователем параметры интерфейса DROPME.
  */
 class UiSettings(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -20,9 +21,20 @@ class UiSettings(context: Context) {
         preferences.edit().putString(KEY_THEME, theme.preferenceValue).commit()
     }
 
+    fun getLanguage(): String {
+        return NeoLanguageDefaults.selectedOrSystem(
+            preferences.getString(KEY_LANGUAGE, null),
+        )
+    }
+
+    fun setLanguage(language: String) {
+        preferences.edit().putString(KEY_LANGUAGE, language).commit()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "dropme_ui"
         const val KEY_THEME = "theme"
+        const val KEY_LANGUAGE = "language"
     }
 }
 

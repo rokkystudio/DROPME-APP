@@ -20,8 +20,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Предоставляет сведения о Wi‑Fi сети, через которую выполняются
- * локальные подключения DROPME.
+ * РџСЂРµРґРѕСЃС‚Р°РІР»СЏРµС‚ СЃРІРµРґРµРЅРёСЏ Рѕ WiвЂ‘Fi СЃРµС‚Рё, С‡РµСЂРµР· РєРѕС‚РѕСЂСѓСЋ РІС‹РїРѕР»РЅСЏСЋС‚СЃСЏ
+ * Р»РѕРєР°Р»СЊРЅС‹Рµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ DROPME.
  */
 class WifiNetworkProvider(
     context: Context,
@@ -30,7 +30,7 @@ class WifiNetworkProvider(
     private val wifiManager = context.applicationContext.getSystemService(WifiManager::class.java)
 
     /**
-     * Содержит привязку к Wi‑Fi сети и IPv4-адрес устройства в этой сети.
+     * РЎРѕРґРµСЂР¶РёС‚ РїСЂРёРІСЏР·РєСѓ Рє WiвЂ‘Fi СЃРµС‚Рё Рё IPv4-Р°РґСЂРµСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР° РІ СЌС‚РѕР№ СЃРµС‚Рё.
      */
     data class WifiNetworkInfo(
         val network: Network,
@@ -44,35 +44,25 @@ class WifiNetworkProvider(
     )
 
     /**
-     * Возвращает активную Wi‑Fi сеть и IPv4-адрес устройства.
+     * Р’РѕР·РІСЂР°С‰Р°РµС‚ Р°РєС‚РёРІРЅСѓСЋ WiвЂ‘Fi СЃРµС‚СЊ Рё IPv4-Р°РґСЂРµСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР°.
      */
     fun getWifiNetworkInfo(): WifiNetworkInfo {
         return findWifiNetworkInfo() ?: throw AppError.NoWifiNetwork.asAppException()
     }
 
     /**
-     * Ищет Wi‑Fi сеть, которую можно использовать для локальных подключений.
+     * Ищет активную Wi‑Fi сеть, доступную для локальных подключений, и ожидает callback сети при отсутствии готовых данных.
      */
     private fun findWifiNetworkInfo(): WifiNetworkInfo? {
-        val activeNetwork = connectivityManager.activeNetwork
-        val bestKnownNetwork = connectivityManager.allNetworks
-            .asSequence()
-            .mapNotNull(::buildWifiNetworkInfo)
-            .sortedByDescending(::scoreNetworkInfo)
-            .firstOrNull()
-        if (bestKnownNetwork != null) {
-            return bestKnownNetwork
-        }
-
-        if (activeNetwork != null) {
-            buildWifiNetworkInfo(activeNetwork)?.let { return it }
-        }
+        connectivityManager.activeNetwork
+            ?.let(::buildWifiNetworkInfo)
+            ?.let { return it }
 
         return awaitWifiNetworkInfo()
     }
 
     /**
-     * Собирает данные о Wi‑Fi сети и отбрасывает варианты без пригодного LAN IPv4.
+     * РЎРѕР±РёСЂР°РµС‚ РґР°РЅРЅС‹Рµ Рѕ WiвЂ‘Fi СЃРµС‚Рё Рё РѕС‚Р±СЂР°СЃС‹РІР°РµС‚ РІР°СЂРёР°РЅС‚С‹ Р±РµР· РїСЂРёРіРѕРґРЅРѕРіРѕ LAN IPv4.
      */
     private fun buildWifiNetworkInfo(network: Network): WifiNetworkInfo? {
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return null
@@ -102,7 +92,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Читает IPv4 и маску именно Wi‑Fi DHCP, чтобы не брать туннельный VPN адрес.
+     * Р§РёС‚Р°РµС‚ IPv4 Рё РјР°СЃРєСѓ РёРјРµРЅРЅРѕ WiвЂ‘Fi DHCP, С‡С‚РѕР±С‹ РЅРµ Р±СЂР°С‚СЊ С‚СѓРЅРЅРµР»СЊРЅС‹Р№ VPN Р°РґСЂРµСЃ.
      */
     @Suppress("DEPRECATION")
     private fun getWifiDhcpInfo(): DhcpWifiInfo? {
@@ -123,7 +113,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Отдаёт приоритет локальным адресам Wi‑Fi перед VPN диапазонами.
+     * РћС‚РґР°С‘С‚ РїСЂРёРѕСЂРёС‚РµС‚ Р»РѕРєР°Р»СЊРЅС‹Рј Р°РґСЂРµСЃР°Рј WiвЂ‘Fi РїРµСЂРµРґ VPN РґРёР°РїР°Р·РѕРЅР°РјРё.
      */
     private fun scoreNetworkInfo(info: WifiNetworkInfo): Int {
         val raw = info.ipv4Address.address
@@ -139,7 +129,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Ожидает доступную Wi‑Fi сеть через актуальный callback API ConnectivityManager.
+     * РћР¶РёРґР°РµС‚ РґРѕСЃС‚СѓРїРЅСѓСЋ WiвЂ‘Fi СЃРµС‚СЊ С‡РµСЂРµР· Р°РєС‚СѓР°Р»СЊРЅС‹Р№ callback API ConnectivityManager.
      */
     private fun awaitWifiNetworkInfo(): WifiNetworkInfo? {
         val selectedNetwork = AtomicReference<WifiNetworkInfo?>()
@@ -176,7 +166,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Находит IPv4-адрес устройства в свойствах Wi‑Fi сети.
+     * РќР°С…РѕРґРёС‚ IPv4-Р°РґСЂРµСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР° РІ СЃРІРѕР№СЃС‚РІР°С… WiвЂ‘Fi СЃРµС‚Рё.
      */
     private fun findIpv4Address(linkProperties: LinkProperties): Inet4Address? {
         linkProperties.linkAddresses
@@ -196,7 +186,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Поднимает наверх типичный LAN IPv4 и опускает адреса VPN/служебных диапазонов.
+     * РџРѕРґРЅРёРјР°РµС‚ РЅР°РІРµСЂС… С‚РёРїРёС‡РЅС‹Р№ LAN IPv4 Рё РѕРїСѓСЃРєР°РµС‚ Р°РґСЂРµСЃР° VPN/СЃР»СѓР¶РµР±РЅС‹С… РґРёР°РїР°Р·РѕРЅРѕРІ.
      */
     private fun scoreIpv4Address(address: Inet4Address): Int {
         val raw = address.address
@@ -211,7 +201,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Преобразует little-endian int из Android Wi‑Fi API в Inet4Address.
+     * РџСЂРµРѕР±СЂР°Р·СѓРµС‚ little-endian int РёР· Android WiвЂ‘Fi API РІ Inet4Address.
      */
     private fun Int.toInet4AddressLittleEndian(): Inet4Address? {
         val bytes = byteArrayOf(
@@ -226,14 +216,14 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Считает количество единиц в маске подсети.
+     * РЎС‡РёС‚Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ РµРґРёРЅРёС† РІ РјР°СЃРєРµ РїРѕРґСЃРµС‚Рё.
      */
     private fun Int.countMaskBits(): Int {
         return Integer.bitCount(this)
     }
 
     /**
-     * Находит длину префикса для IPv4-адреса Wi‑Fi сети.
+     * РќР°С…РѕРґРёС‚ РґР»РёРЅСѓ РїСЂРµС„РёРєСЃР° РґР»СЏ IPv4-Р°РґСЂРµСЃР° WiвЂ‘Fi СЃРµС‚Рё.
      */
     private fun findPrefixLength(linkProperties: LinkProperties, ipv4Address: Inet4Address): Int? {
         return linkProperties.linkAddresses
@@ -242,7 +232,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Проверяет наличие Wi‑Fi транспорта у сети Android.
+     * РџСЂРѕРІРµСЂСЏРµС‚ РЅР°Р»РёС‡РёРµ WiвЂ‘Fi С‚СЂР°РЅСЃРїРѕСЂС‚Р° Сѓ СЃРµС‚Рё Android.
      */
     private fun NetworkCapabilities.isUsableWifiNetwork(): Boolean {
         return hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
@@ -250,7 +240,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Регистрирует callback поиска Wi‑Fi сети через доступный API уровня SDK.
+     * Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ callback РїРѕРёСЃРєР° WiвЂ‘Fi СЃРµС‚Рё С‡РµСЂРµР· РґРѕСЃС‚СѓРїРЅС‹Р№ API СѓСЂРѕРІРЅСЏ SDK.
      */
     private fun registerWifiCallback(
         request: NetworkRequest,

@@ -10,7 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.View
-import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -18,6 +17,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WifiNetworkProvider
@@ -30,6 +30,9 @@ import com.rokkystudio.dropme.storage.StorageRootEntry
 import com.rokkystudio.dropme.storage.StorageRootsRepository
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
 import com.rokkystudio.dropme.ui.StorageRootsScreen
+import com.rokkystudio.sharedapp.neoui.NeoLanguageDefaults
+import com.rokkystudio.sharedapp.neoui.NeoThemeDefaults
+import com.rokkystudio.sharedapp.neoui.NeoTopBarView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -42,8 +45,7 @@ class MainActivity : AppCompatActivity() {
     private val scanHandler = Handler(Looper.getMainLooper())
 
     private lateinit var uiSettings: UiSettings
-    private lateinit var themeToggleButton: ImageButton
-    private lateinit var languageFlag: ImageButton
+    private lateinit var neoTopBar: NeoTopBarView
     private lateinit var statusText: TextView
     private lateinit var detailText: TextView
     private lateinit var progressBar: ProgressBar
@@ -133,8 +135,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindViews() {
-        themeToggleButton = findViewById(R.id.themeToggleButton)
-        languageFlag = findViewById(R.id.languageFlag)
+        neoTopBar = findViewById(R.id.neoTopBar)
         statusText = findViewById(R.id.mainStatusText)
         detailText = findViewById(R.id.mainDetailText)
         progressBar = findViewById(R.id.mainProgressBar)
@@ -162,9 +163,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindActions() {
-        themeToggleButton.setOnClickListener {
-            toggleTheme()
-        }
         disconnectButton.setOnClickListener {
             AndroidConnectionService.stop(this)
             renderConnectionState(
@@ -177,45 +175,67 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleTheme() {
-        val theme = when (uiSettings.getTheme()) {
-            AppTheme.LIGHT -> AppTheme.DARK
-            AppTheme.DARK -> AppTheme.LIGHT
-        }
-        uiSettings.setTheme(theme)
-        AppCompatDelegate.setDefaultNightMode(
-            when (theme) {
-                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+        applyNeoTheme(
+            when (uiSettings.getTheme()) {
+                AppTheme.LIGHT -> NeoThemeDefaults.NIGHT
+                AppTheme.DARK -> NeoThemeDefaults.DAY
             },
         )
     }
 
     private fun renderThemeToggle() {
-        when (uiSettings.getTheme()) {
-            AppTheme.LIGHT -> {
-                themeToggleButton.setImageResource(R.drawable.theme_sun)
-                themeToggleButton.contentDescription = getString(R.string.theme_light)
-            }
-
-            AppTheme.DARK -> {
-                themeToggleButton.setImageResource(R.drawable.theme_moon)
-                themeToggleButton.contentDescription = getString(R.string.theme_dark)
-            }
-        }
+        neoTopBar.setAppInfo(
+            title = getString(R.string.app_name),
+            subtitle = getString(R.string.android_client),
+            version = BuildConfig.VERSION_NAME,
+            iconResId = R.mipmap.ic_launcher,
+        )
+        neoTopBar.setThemeOptions(
+            options = NeoThemeDefaults.dayNight(),
+            selected = selectedNeoTheme(),
+            onSelected = ::applyNeoTheme,
+        )
     }
 
     private fun renderLanguageFlag() {
-        val language = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            resources.configuration.locales[0]?.language
-        } else {
-            @Suppress("DEPRECATION")
-            resources.configuration.locale?.language
+        neoTopBar.setLanguageOptions(
+            options = NeoLanguageDefaults.supportedLanguages(),
+            selected = uiSettings.getLanguage(),
+            onSelected = ::applyNeoLanguage,
+        )
+    }
+
+    private fun applyNeoLanguage(language: String) {
+        if (uiSettings.getLanguage() == language) {
+            return
         }
-        languageFlag.setImageResource(
-            if (language.equals("ru", ignoreCase = true)) {
-                R.drawable.flag_ru
-            } else {
-                R.drawable.flag_us
+        uiSettings.setLanguage(language)
+        AppCompatDelegate.setApplicationLocales(
+            LocaleListCompat.forLanguageTags(language),
+        )
+    }
+
+    private fun selectedNeoTheme(): String {
+        return when (uiSettings.getTheme()) {
+            AppTheme.LIGHT -> NeoThemeDefaults.DAY
+            AppTheme.DARK -> NeoThemeDefaults.NIGHT
+        }
+    }
+
+    private fun applyNeoTheme(theme: String) {
+        val appTheme = when (theme) {
+            NeoThemeDefaults.DAY -> AppTheme.LIGHT
+            NeoThemeDefaults.NIGHT -> AppTheme.DARK
+            else -> return
+        }
+        if (uiSettings.getTheme() == appTheme) {
+            return
+        }
+        uiSettings.setTheme(appTheme)
+        AppCompatDelegate.setDefaultNightMode(
+            when (appTheme) {
+                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
             },
         )
     }

@@ -2,23 +2,27 @@ package com.rokkystudio.dropme
 
 import android.app.Application
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 
 /**
- * Применяет сохранённую тему на уровне процесса до создания любой Activity.
- * Это гарантирует одинаковую тему для launcher, Sharing и будущих точек входа.
+ * Применяет сохранённые настройки интерфейса на уровне процесса до создания Activity.
  */
 class DropMeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        applySavedTheme()
+        applySavedUiSettings()
     }
 
-    private fun applySavedTheme() {
+    private fun applySavedUiSettings() {
+        val uiSettings = UiSettings(this)
         AppCompatDelegate.setDefaultNightMode(
-            when (UiSettings(this).getTheme()) {
+            when (uiSettings.getTheme()) {
                 AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
                 AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
             },
+        )
+        AppCompatDelegate.setApplicationLocales(
+            LocaleListCompat.forLanguageTags(uiSettings.getLanguage()),
         )
     }
 }
