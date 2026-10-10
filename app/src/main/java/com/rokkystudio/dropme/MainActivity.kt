@@ -17,7 +17,6 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WifiNetworkProvider
@@ -30,8 +29,6 @@ import com.rokkystudio.dropme.storage.StorageRootEntry
 import com.rokkystudio.dropme.storage.StorageRootsRepository
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
 import com.rokkystudio.dropme.ui.StorageRootsScreen
-import com.rokkystudio.sharedapp.neoui.NeoLanguageDefaults
-import com.rokkystudio.sharedapp.neoui.NeoThemeDefaults
 import com.rokkystudio.sharedapp.neoui.NeoTopBarView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -174,15 +171,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun toggleTheme() {
-        applyNeoTheme(
-            when (uiSettings.getTheme()) {
-                AppTheme.LIGHT -> NeoThemeDefaults.NIGHT
-                AppTheme.DARK -> NeoThemeDefaults.DAY
-            },
-        )
-    }
-
     private fun renderThemeToggle() {
         neoTopBar.setAppInfo(
             title = getString(R.string.app_name),
@@ -190,55 +178,14 @@ class MainActivity : AppCompatActivity() {
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )
-        neoTopBar.setThemeOptions(
-            options = NeoThemeDefaults.dayNight(),
-            selected = selectedNeoTheme(),
-            onSelected = ::applyNeoTheme,
-        )
-    }
-
-    private fun renderLanguageFlag() {
-        neoTopBar.setLanguageOptions(
-            options = NeoLanguageDefaults.supportedLanguages(),
-            selected = uiSettings.getLanguage(),
-            onSelected = ::applyNeoLanguage,
-        )
-    }
-
-    private fun applyNeoLanguage(language: String) {
-        if (uiSettings.getLanguage() == language) {
-            return
-        }
-        uiSettings.setLanguage(language)
-        AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(language),
-        )
-    }
-
-    private fun selectedNeoTheme(): String {
-        return when (uiSettings.getTheme()) {
-            AppTheme.LIGHT -> NeoThemeDefaults.DAY
-            AppTheme.DARK -> NeoThemeDefaults.NIGHT
+        uiSettings.bindTopBarUi(neoTopBar) {
+            uiSettings.applyAppCompatNightMode()
+            recreate()
         }
     }
+    private fun toggleTheme() = Unit
 
-    private fun applyNeoTheme(theme: String) {
-        val appTheme = when (theme) {
-            NeoThemeDefaults.DAY -> AppTheme.LIGHT
-            NeoThemeDefaults.NIGHT -> AppTheme.DARK
-            else -> return
-        }
-        if (uiSettings.getTheme() == appTheme) {
-            return
-        }
-        uiSettings.setTheme(appTheme)
-        AppCompatDelegate.setDefaultNightMode(
-            when (appTheme) {
-                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
-            },
-        )
-    }
+    private fun renderLanguageFlag() = Unit
 
     private fun startScanLoop() {
         scanHandler.removeCallbacks(nextScanRunnable)
