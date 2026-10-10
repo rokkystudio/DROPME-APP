@@ -11,9 +11,6 @@ import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.rokkystudio.dropme.MainActivity
@@ -25,6 +22,7 @@ import com.rokkystudio.dropme.network.WifiNetworkProvider
 import com.rokkystudio.dropme.network.WindowsControlClient
 import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.storage.StorageRootsRepository
+import com.rokkystudio.sharedapp.neoui.NeoNotificationViews
 import com.rokkystudio.dropme.toAppError
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -273,17 +271,17 @@ class AndroidConnectionService : Service() {
         }
 
         val notificationAccent = ContextCompat.getColor(this, R.color.status_connected)
-        val disconnectTitle = SpannableString(getString(R.string.service_action_disconnect)).apply {
-            setSpan(
-                ForegroundColorSpan(notificationAccent),
-                0,
-                length,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-            )
-        }
         val largeIcon = BitmapFactory.decodeResource(
             resources,
             R.drawable.notification_large_icon,
+        )
+        val contentView = NeoNotificationViews.serviceAction(
+            context = this,
+            title = title,
+            text = text,
+            iconResId = R.mipmap.ic_launcher_monochrome,
+            actionText = getString(R.string.service_action_disconnect).uppercase(),
+            actionIntent = disconnectIntent.takeIf { snapshot.isActive },
         )
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
@@ -292,17 +290,14 @@ class AndroidConnectionService : Service() {
             .setColor(notificationAccent)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCustomContentView(contentView)
+            .setCustomBigContentView(contentView)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setContentIntent(openAppIntent)
             .setOngoing(snapshot.isActive)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(
-                R.mipmap.ic_launcher_monochrome,
-                disconnectTitle,
-                disconnectIntent,
-            )
             .build()
     }
 

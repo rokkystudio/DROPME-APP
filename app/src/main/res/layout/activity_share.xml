@@ -186,13 +186,13 @@
                 <Button
                     android:id="@+id/retryButton"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="46dp"
                     android:layout_marginTop="12dp"
                     android:background="@drawable/bg_button"
                     android:stateListAnimator="@null"
                     android:text="@string/share_action_retry"
                     android:textAllCaps="false"
-                    android:textColor="@color/text_primary"
+                    android:textColor="@color/action_button_text_color"
                     android:backgroundTint="@null"
                     android:visibility="gone" />
             </LinearLayout>
@@ -232,12 +232,12 @@
         <Button
             android:id="@+id/closeButton"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="46dp"
             android:background="@drawable/bg_button"
             android:stateListAnimator="@null"
             android:text="@string/share_action_close"
             android:textAllCaps="false"
             android:backgroundTint="@null"
-            android:textColor="@color/text_primary" />
+            android:textColor="@color/action_button_text_color" />
     </LinearLayout>
 </LinearLayout>

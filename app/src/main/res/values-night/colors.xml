@@ -28,4 +28,8 @@
     <color name="share_canceled">#FFE3A12F</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="button_surface">#FF2A303A</color>
+    <color name="button_disabled">#FF20252D</color>
+    <color name="button_text_disabled">#FF4B525B</color>
+    <color name="border_disabled">#FF303841</color>
 </resources>
