@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -271,10 +270,6 @@ class AndroidConnectionService : Service() {
         }
 
         val notificationAccent = ContextCompat.getColor(this, R.color.status_connected)
-        val largeIcon = BitmapFactory.decodeResource(
-            resources,
-            R.drawable.notification_large_icon,
-        )
         val contentView = NeoNotificationViews.serviceAction(
             context = this,
             title = title,
@@ -286,7 +281,6 @@ class AndroidConnectionService : Service() {
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setLargeIcon(largeIcon)
             .setColor(notificationAccent)
             .setContentTitle(title)
             .setContentText(text)
