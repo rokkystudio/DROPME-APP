@@ -476,11 +476,7 @@ class AndroidWebDavServer(
             writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
-        if (parentResolution.parent.isVirtualRoot || parentResolution.parent.isPublishedRootEntry) {
-            writeSimpleResponse(output, 403, "Forbidden", "text/plain; charset=utf-8", ByteArray(0))
-            return
-        }
-        if (!parentResolution.parent.isWritable) {
+        if (parentResolution.parent.isVirtualRoot || !parentResolution.parent.isWritable) {
             writeSimpleResponse(output, 403, "Forbidden", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
@@ -555,7 +551,7 @@ class AndroidWebDavServer(
             writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
-        if (parentResolution.parent.isVirtualRoot || parentResolution.parent.isPublishedRootEntry || !parentResolution.parent.isWritable) {
+        if (parentResolution.parent.isVirtualRoot || !parentResolution.parent.isWritable) {
             writeSimpleResponse(output, 403, "Forbidden", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
@@ -600,7 +596,7 @@ class AndroidWebDavServer(
             writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
-        if (destinationParent.parent.isVirtualRoot || destinationParent.parent.isPublishedRootEntry || !destinationParent.parent.isWritable) {
+        if (destinationParent.parent.isVirtualRoot || !destinationParent.parent.isWritable) {
             writeSimpleResponse(output, 403, "Forbidden", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
