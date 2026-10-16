@@ -1,9 +1,9 @@
 package com.rokkystudio.dropme
 
 import android.content.Context
-import com.rokkystudio.sharedapp.neoui.NeoThemeMode
-import com.rokkystudio.sharedapp.neoui.NeoTopBarView
-import com.rokkystudio.sharedapp.neoui.NeoUiSettings
+import badfox.logic.neoui.NeoThemeMode
+import badfox.logic.neoui.NeoTopBarView
+import badfox.logic.neoui.NeoUiSettings
 
 /**
  * Stores and applies standard NeoUI interface settings for DROPME.
@@ -20,12 +20,20 @@ class UiSettings(context: Context) {
 
     fun getLanguage(): String = uiSettings.getLanguage()
 
+    /**
+     * Применяет сохранённую тему приложения через AppCompat.
+     */
     fun applyAppCompatNightMode() {
         uiSettings.applyAppCompatNightMode()
     }
 
-    fun bindTopBarUi(topBar: NeoTopBarView, onChanged: () -> Unit) {
-        uiSettings.bindTopBar(topBar, onChanged = onChanged)
+    /**
+     * Связывает NeoUI-панель со стандартными настройками темы и языка.
+     *
+     * NeoUI сохраняет выбор и применяет соответствующую настройку через AppCompat.
+     */
+    fun bindTopBarUi(topBar: NeoTopBarView) {
+        uiSettings.bindTopBar(topBar)
     }
 
     private companion object {

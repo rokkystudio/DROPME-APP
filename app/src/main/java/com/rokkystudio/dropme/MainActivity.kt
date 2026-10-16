@@ -29,7 +29,7 @@ import com.rokkystudio.dropme.storage.StorageRootEntry
 import com.rokkystudio.dropme.storage.StorageRootsRepository
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
 import com.rokkystudio.dropme.ui.StorageRootsScreen
-import com.rokkystudio.sharedapp.neoui.NeoTopBarView
+import badfox.logic.neoui.NeoTopBarView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -178,10 +178,7 @@ class MainActivity : AppCompatActivity() {
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )
-        uiSettings.bindTopBarUi(neoTopBar) {
-            uiSettings.applyAppCompatNightMode()
-            recreate()
-        }
+        uiSettings.bindTopBarUi(neoTopBar)
     }
     private fun toggleTheme() = Unit
 

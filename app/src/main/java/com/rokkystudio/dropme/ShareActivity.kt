@@ -20,15 +20,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.rokkystudio.dropme.network.WifiNetworkProvider
 import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WindowsUploadClient
 import com.rokkystudio.dropme.storage.SharedFileReader
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
-import com.rokkystudio.sharedapp.neoui.NeoTopBarView
+import badfox.logic.neoui.NeoTopBarView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -117,21 +115,6 @@ class ShareActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_share)
-        val rootView = findViewById<View>(R.id.shareRoot)
-        val basePaddingLeft = rootView.paddingLeft
-        val basePaddingTop = rootView.paddingTop
-        val basePaddingRight = rootView.paddingRight
-        val basePaddingBottom = rootView.paddingBottom
-        ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(
-                basePaddingLeft + bars.left,
-                basePaddingTop + bars.top,
-                basePaddingRight + bars.right,
-                basePaddingBottom + bars.bottom,
-            )
-            insets
-        }
 
         bindViews()
         bindDependencies()
@@ -248,10 +231,7 @@ class ShareActivity : AppCompatActivity() {
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )
-        uiSettings.bindTopBarUi(neoTopBar) {
-            uiSettings.applyAppCompatNightMode()
-            recreate()
-        }
+        uiSettings.bindTopBarUi(neoTopBar)
     }
     private fun toggleTheme() = Unit
 

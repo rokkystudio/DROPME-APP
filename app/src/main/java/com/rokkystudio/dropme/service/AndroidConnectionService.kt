@@ -21,7 +21,7 @@ import com.rokkystudio.dropme.network.WifiNetworkProvider
 import com.rokkystudio.dropme.network.WindowsControlClient
 import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.storage.StorageRootsRepository
-import com.rokkystudio.sharedapp.neoui.NeoNotificationViews
+import badfox.logic.neoui.NeoNotificationViews
 import com.rokkystudio.dropme.toAppError
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -232,6 +232,9 @@ class AndroidConnectionService : Service() {
             .notify(NOTIFICATION_ID, buildNotification(snapshot))
     }
 
+    /**
+     * Создаёт системное уведомление foreground-сервиса для текущего состояния соединения.
+     */
     private fun buildNotification(snapshot: ConnectionServiceSnapshot): Notification {
         val openAppIntent = PendingIntent.getActivity(
             this,
@@ -270,29 +273,36 @@ class AndroidConnectionService : Service() {
         }
 
         val notificationAccent = ContextCompat.getColor(this, R.color.status_connected)
-        val contentView = NeoNotificationViews.serviceAction(
-            context = this,
+        val actions = if (snapshot.isActive) {
+            listOf(
+                NeoNotificationViews.ServiceNotificationAction(
+                    text = getString(R.string.service_action_disconnect),
+                    intent = disconnectIntent,
+                )
+            )
+        } else {
+            emptyList()
+        }
+        val content = NeoNotificationViews.ServiceNotificationContent(
             title = title,
             text = text,
-            iconResId = R.mipmap.ic_launcher_monochrome,
-            actionText = getString(R.string.service_action_disconnect).uppercase(),
-            actionIntent = disconnectIntent.takeIf { snapshot.isActive },
+            accentColor = notificationAccent,
+            actions = actions,
         )
-
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setColor(notificationAccent)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setCustomContentView(contentView)
-            .setCustomBigContentView(contentView)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setContentIntent(openAppIntent)
             .setOngoing(snapshot.isActive)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+
+        return NeoNotificationViews.applyServiceNotificationContent(
+            builder = builder,
+            context = this,
+            content = content,
+            defaultActionIconResId = R.mipmap.ic_launcher_monochrome,
+        ).build()
     }
 
     private fun createNotificationChannel() {
