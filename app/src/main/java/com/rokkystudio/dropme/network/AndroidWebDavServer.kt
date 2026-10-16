@@ -600,10 +600,7 @@ class AndroidWebDavServer(
             writeSimpleResponse(output, 403, "Forbidden", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
-        if (source.root?.id != destinationParent.parent.root?.id) {
-            writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
-            return
-        }
+        val sameRoot = source.root?.id == destinationParent.parent.root?.id
 
         val destinationNode = resolvePath(destinationPath)
         val overwrite = request.headers["overwrite"]?.equals("T", ignoreCase = true) ?: true
@@ -627,27 +624,31 @@ class AndroidWebDavServer(
             }
         }
 
-        val sourceParent = resolveParentPath(request.path) ?: run {
-            writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
-            return
-        }
-        val moved = when {
-            source.directFile != null && destinationParent.parent.directFile != null -> {
-                val targetFile = File(destinationParent.parent.directFile, destinationParent.childName)
-                targetFile.parentFile?.mkdirs()
-                source.directFile.renameTo(targetFile)
+        val moved = if (sameRoot) {
+            val sourceParent = resolveParentPath(request.path) ?: run {
+                writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
+                return
             }
+            when {
+                source.directFile != null && destinationParent.parent.directFile != null -> {
+                    val targetFile = File(destinationParent.parent.directFile, destinationParent.childName)
+                    targetFile.parentFile?.mkdirs()
+                    source.directFile.renameTo(targetFile)
+                }
 
-            source.safDocument != null && sourceParent.parent.safDocument != null && destinationParent.parent.safDocument != null -> {
-                moveSafDocument(
-                    sourceDocument = source.safDocument,
-                    sourceParent = sourceParent.parent.safDocument,
-                    destinationParent = destinationParent.parent.safDocument,
-                    destinationName = destinationParent.childName,
-                )
+                source.safDocument != null && sourceParent.parent.safDocument != null && destinationParent.parent.safDocument != null -> {
+                    moveSafDocument(
+                        sourceDocument = source.safDocument,
+                        sourceParent = sourceParent.parent.safDocument,
+                        destinationParent = destinationParent.parent.safDocument,
+                        destinationName = destinationParent.childName,
+                    )
+                }
+
+                else -> false
             }
-
-            else -> false
+        } else {
+            copyNode(source, destinationParent.parent, destinationParent.childName) && deleteNode(source)
         }
         if (!moved) {
             writeSimpleResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
@@ -1051,6 +1052,113 @@ class AndroidWebDavServer(
                 ?: throw IOException("Could not open SAF input stream")
         }
         throw FileNotFoundException("Node is not a file")
+    }
+
+    /**
+     * Копирует файл или каталог между опубликованными корнями независимо от их backend.
+     * Используется для MOVE между разными storage root, где атомарный rename недоступен.
+     */
+    private fun copyNode(source: ResolvedNode, destinationParent: ResolvedNode, destinationName: String): Boolean {
+        return try {
+            if (source.isDirectory) {
+                val createdDirectory = createDestinationDirectory(destinationParent, destinationName) ?: return false
+                sourceChildren(source).all { child ->
+                    copyNode(child, createdDirectory, child.displayName)
+                }
+            } else {
+                openInputStream(source).use { input ->
+                    openDestinationOutputStream(destinationParent, destinationName).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                true
+            }
+        } catch (throwable: Throwable) {
+            Log.d(LOG_TAG, "copyNode failed from ${source.displayName} to $destinationName", throwable)
+            false
+        }
+    }
+
+    private fun sourceChildren(source: ResolvedNode): List<ResolvedNode> {
+        return when {
+            source.directFile != null -> source.directFile.listFiles().orEmpty().map { child ->
+                ResolvedNode(
+                    root = source.root,
+                    segments = source.segments + child.name,
+                    directFile = child,
+                    exists = true,
+                    isDirectory = child.isDirectory,
+                    isVirtualRoot = false,
+                    isPublishedRootEntry = false,
+                )
+            }
+
+            source.safDocument != null -> source.safDocument.listFiles().map { child ->
+                ResolvedNode(
+                    root = source.root,
+                    segments = source.segments + child.name.orEmpty(),
+                    safDocument = child,
+                    exists = true,
+                    isDirectory = child.isDirectory,
+                    isVirtualRoot = false,
+                    isPublishedRootEntry = false,
+                )
+            }
+
+            else -> emptyList()
+        }
+    }
+
+    private fun createDestinationDirectory(parent: ResolvedNode, name: String): ResolvedNode? {
+        parent.directFile?.let { directory ->
+            val child = File(directory, name)
+            if (!child.mkdir() && !child.isDirectory) {
+                return null
+            }
+            return ResolvedNode(
+                root = parent.root,
+                segments = parent.segments + name,
+                directFile = child,
+                exists = true,
+                isDirectory = true,
+                isVirtualRoot = false,
+                isPublishedRootEntry = false,
+            )
+        }
+        parent.safDocument?.let { directory ->
+            val child = directory.createDirectory(name) ?: return null
+            return ResolvedNode(
+                root = parent.root,
+                segments = parent.segments + name,
+                safDocument = child,
+                exists = true,
+                isDirectory = true,
+                isVirtualRoot = false,
+                isPublishedRootEntry = false,
+            )
+        }
+        return null
+    }
+
+    private fun openDestinationOutputStream(parent: ResolvedNode, name: String): java.io.OutputStream {
+        parent.directFile?.let { directory ->
+            return FileOutputStream(File(directory, name), false)
+        }
+        parent.safDocument?.let { directory ->
+            val child = directory.createFile("application/octet-stream", name)
+                ?: throw IOException("Could not create destination SAF document")
+            return context.contentResolver.openOutputStream(child.uri, "rwt")
+                ?: throw IOException("Could not open destination SAF output stream")
+        }
+        throw IOException("Destination parent is not writable")
+    }
+
+    private fun deleteNode(node: ResolvedNode): Boolean {
+        return when {
+            node.directFile != null -> deleteDirect(node.directFile)
+            node.safDocument != null -> deleteSaf(node.safDocument)
+            else -> false
+        }
     }
 
     private fun moveSafDocument(
