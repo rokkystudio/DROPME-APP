@@ -218,7 +218,7 @@ class MainActivity : AppCompatActivity() {
                 ).also { servers ->
                     runOnUiThread {
                         if (activityStarted) {
-                            mergeDiscoveredServers(servers)
+                            replaceDiscoveredServers(servers)
                             renderScanningIndicator()
                         }
                     }
@@ -260,6 +260,16 @@ class MainActivity : AppCompatActivity() {
             merged[serverKey(server)] = server
         }
         discoveredServers = merged.values.sortedWith(
+            compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
+        )
+        renderServerList()
+    }
+
+    /**
+     * Заменяет список серверов результатом завершённого scan, удаляя устаревшие записи.
+     */
+    private fun replaceDiscoveredServers(servers: List<WindowsServer>) {
+        discoveredServers = servers.sortedWith(
             compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
         )
         renderServerList()
