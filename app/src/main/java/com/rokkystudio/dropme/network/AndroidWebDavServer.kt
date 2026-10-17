@@ -305,6 +305,17 @@ class AndroidWebDavServer(
         }
         val responseOffset = requestedRange?.start ?: 0L
         val responseLength = requestedRange?.length ?: length
+        val verifySha256 = sendBody && requestedRange != null &&
+            request.headers[HEADER_DROP_ME_VERIFY]?.equals("sha256", ignoreCase = true) == true
+        val verifiedRangeBody = if (verifySha256) {
+            if (responseLength > MAX_VERIFIED_RANGE_BYTES || responseLength > Int.MAX_VALUE) {
+                writeSimpleResponse(output, 413, "Payload Too Large", "text/plain; charset=utf-8", ByteArray(0))
+                return
+            }
+            readExactRange(node, responseOffset, responseLength.toInt())
+        } else {
+            null
+        }
         val headers = linkedMapOf(
             "Content-Type" to "application/octet-stream",
             "Content-Disposition" to "attachment; filename*=UTF-8''${Uri.encode(node.displayName)}",
@@ -315,15 +326,22 @@ class AndroidWebDavServer(
         if (requestedRange != null) {
             headers["Content-Range"] = "bytes ${requestedRange.start}-${requestedRange.endInclusive}/$length"
         }
+        if (verifiedRangeBody != null) {
+            headers[HEADER_DROP_ME_SHA256_RESPONSE] = sha256Hex(verifiedRangeBody)
+        }
         writeResponseHeaders(output, if (requestedRange != null) 206 else 200, if (requestedRange != null) "Partial Content" else "OK", headers)
         if (!sendBody) {
             output.flush()
             return
         }
 
-        openInputStream(node).use { stream ->
-            skipFully(stream, responseOffset)
-            copyExactly(stream, output, responseLength)
+        if (verifiedRangeBody != null) {
+            output.write(verifiedRangeBody)
+        } else {
+            openInputStream(node).use { stream ->
+                skipFully(stream, responseOffset)
+                copyExactly(stream, output, responseLength)
+            }
         }
         output.flush()
     }
@@ -1670,6 +1688,31 @@ class AndroidWebDavServer(
         return ByteArray(bytes.size) { index -> bytes[index] }.toString(StandardCharsets.UTF_8)
     }
 
+    private fun readExactRange(node: ResolvedNode, offset: Long, length: Int): ByteArray {
+        val bytes = ByteArray(length)
+        openInputStream(node).use { input ->
+            skipFully(input, offset)
+            var filled = 0
+            while (filled < bytes.size) {
+                val read = input.read(bytes, filled, bytes.size - filled)
+                if (read < 0) {
+                    throw EOFException("File ended before the requested range was read")
+                }
+                if (read == 0) continue
+                filled += read
+            }
+        }
+        return bytes
+    }
+
+    private fun sha256Hex(bytes: ByteArray): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { byte ->
+                (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+            }
+    }
+
     private fun digestInputStream(input: InputStream): StoredFileDigest {
         val messageDigest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -1843,11 +1886,13 @@ class AndroidWebDavServer(
     private companion object {
         const val LOG_TAG = "DROPME"
         const val SOCKET_TIMEOUT_MS = 10_000
+        const val MAX_VERIFIED_RANGE_BYTES = 4L * 1024L * 1024L
         const val WINFSP_DOWNLOAD_URL = "https://github.com/rokkystudio/DROPME-WIN/raw/refs/heads/master/Files/winfsp-2.2.26215.msi"
         const val API_META_PATH = "/.dropmefs/meta"
         const val API_LIST_PATH = "/.dropmefs/list"
         const val API_DIGEST_PATH = "/.dropmefs/digest"
         const val HEADER_DROP_ME_SHA256 = "x-dropme-sha256"
+        const val HEADER_DROP_ME_VERIFY = "x-dropme-verify"
         const val HEADER_DROP_ME_LENGTH_RESPONSE = "X-DROPME-Length"
         const val HEADER_DROP_ME_SHA256_RESPONSE = "X-DROPME-SHA256"
         val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")
