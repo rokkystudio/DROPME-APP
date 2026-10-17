@@ -3,6 +3,7 @@ package com.rokkystudio.dropme.network
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.system.Os
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.rokkystudio.dropme.AppError
@@ -662,29 +663,10 @@ class AndroidWebDavServer(
 
     private fun replaceDirectFile(stagingFile: File, targetFile: File) {
         targetFile.parentFile?.mkdirs()
-        if (!targetFile.exists()) {
-            if (!stagingFile.renameTo(targetFile)) {
-                throw IOException("Could not commit staged file")
-            }
-            return
-        }
-
-        val backupFile = File(targetFile.parentFile, ".dropme-${UUID.randomUUID()}.bak")
-        if (!targetFile.renameTo(backupFile)) {
-            throw IOException("Could not preserve existing destination file")
-        }
-        var committed = false
         try {
-            if (!stagingFile.renameTo(targetFile)) {
-                throw IOException("Could not replace destination file")
-            }
-            committed = true
-        } finally {
-            if (committed) {
-                backupFile.delete()
-            } else {
-                backupFile.renameTo(targetFile)
-            }
+            Os.rename(stagingFile.absolutePath, targetFile.absolutePath)
+        } catch (throwable: Throwable) {
+            throw IOException("Could not atomically commit staged file", throwable)
         }
     }
 
@@ -696,11 +678,13 @@ class AndroidWebDavServer(
         expectedSha256: String?,
         beforeCommit: () -> Unit,
     ): StoredFileDigest {
+        recoverSafTransactions(parentDocument)
         val existingDocument = parentDocument.findFile(destinationName)
         if (existingDocument?.isDirectory == true) {
             throw IOException("Destination is a directory")
         }
-        val stagingName = "DROPME-${UUID.randomUUID()}.tmp"
+        val transactionId = UUID.randomUUID().toString()
+        val stagingName = "DROPME-$transactionId.tmp"
         val stagingDocument = parentDocument.createFile("application/octet-stream", stagingName)
             ?: throw IOException("Could not create SAF staging document")
         try {
@@ -712,7 +696,13 @@ class AndroidWebDavServer(
                 ?: throw IOException("Could not verify SAF staging document")
             validateStoredDigest(digest, expectedLength, expectedSha256)
             beforeCommit()
-            replaceSafDocument(parentDocument, stagingDocument, existingDocument, destinationName)
+            replaceSafDocument(
+                parentDocument = parentDocument,
+                stagingDocument = stagingDocument,
+                existingDocument = existingDocument,
+                destinationName = destinationName,
+                transactionId = transactionId,
+            )
             return digest
         } catch (throwable: Throwable) {
             stagingDocument.delete()
@@ -725,6 +715,7 @@ class AndroidWebDavServer(
         stagingDocument: DocumentFile,
         existingDocument: DocumentFile?,
         destinationName: String,
+        transactionId: String,
     ) {
         if (existingDocument == null) {
             if (!stagingDocument.renameTo(destinationName)) {
@@ -733,8 +724,15 @@ class AndroidWebDavServer(
             return
         }
 
-        val backupName = "DROPME-${UUID.randomUUID()}.bak"
+        val backupName = "DROPME-$transactionId.bak"
+        val journalName = "DROPME-$transactionId.txn"
+        val journalDocument = createSafTransactionJournal(
+            parentDocument = parentDocument,
+            journalName = journalName,
+            destinationName = destinationName,
+        )
         if (!existingDocument.renameTo(backupName)) {
+            journalDocument.delete()
             throw IOException("Could not preserve existing SAF destination")
         }
         val backupDocument = parentDocument.findFile(backupName) ?: existingDocument
@@ -747,10 +745,87 @@ class AndroidWebDavServer(
         } finally {
             if (committed) {
                 backupDocument.delete()
+                journalDocument.delete()
             } else {
-                backupDocument.renameTo(destinationName)
+                val restored = backupDocument.renameTo(destinationName)
+                if (restored) {
+                    journalDocument.delete()
+                }
             }
         }
+    }
+
+    private fun createSafTransactionJournal(
+        parentDocument: DocumentFile,
+        journalName: String,
+        destinationName: String,
+    ): DocumentFile {
+        val journalDocument = parentDocument.createFile("application/octet-stream", journalName)
+            ?: throw IOException("Could not create SAF transaction journal")
+        try {
+            context.contentResolver.openOutputStream(journalDocument.uri, "rwt")?.use { output ->
+                output.write(destinationName.toByteArray(StandardCharsets.UTF_8))
+                output.flush()
+            } ?: throw IOException("Could not write SAF transaction journal")
+            return journalDocument
+        } catch (throwable: Throwable) {
+            journalDocument.delete()
+            throw throwable
+        }
+    }
+
+    private fun recoverSafTransactions(parentDocument: DocumentFile) {
+        synchronized(mutationLock) {
+            parentDocument.listFiles()
+                .filter { document -> SAF_TRANSACTION_PATTERN.matches(document.name.orEmpty()) }
+                .forEach { journalDocument -> recoverSafTransaction(parentDocument, journalDocument) }
+        }
+    }
+
+    private fun recoverSafTransaction(parentDocument: DocumentFile, journalDocument: DocumentFile) {
+        try {
+            val journalName = journalDocument.name.orEmpty()
+            val match = SAF_TRANSACTION_PATTERN.matchEntire(journalName) ?: return
+            val transactionId = match.groupValues[1]
+            val destinationName = context.contentResolver.openInputStream(journalDocument.uri)?.use { input ->
+                input.readBytes().toString(StandardCharsets.UTF_8)
+            }.orEmpty()
+            if (destinationName.isEmpty()) {
+                Log.d(LOG_TAG, "SAF transaction journal has no destination: $journalName")
+                return
+            }
+
+            val backupDocument = parentDocument.findFile("DROPME-$transactionId.bak")
+            val stagingDocument = parentDocument.findFile("DROPME-$transactionId.tmp")
+            val destinationDocument = parentDocument.findFile(destinationName)
+            when {
+                destinationDocument != null -> {
+                    backupDocument?.delete()
+                    stagingDocument?.delete()
+                    journalDocument.delete()
+                }
+
+                backupDocument != null -> {
+                    if (backupDocument.renameTo(destinationName)) {
+                        stagingDocument?.delete()
+                        journalDocument.delete()
+                    } else {
+                        Log.d(LOG_TAG, "Could not restore SAF transaction $transactionId")
+                    }
+                }
+
+                else -> {
+                    stagingDocument?.delete()
+                    journalDocument.delete()
+                }
+            }
+        } catch (throwable: Throwable) {
+            Log.d(LOG_TAG, "SAF transaction recovery failed", throwable)
+        }
+    }
+
+    private fun isSafInternalTemporaryName(name: String): Boolean {
+        return SAF_TRANSACTION_PATTERN.matches(name) || SAF_STAGING_PATTERN.matches(name)
     }
 
     private fun validatePutPreconditions(request: WebDavRequest, current: ResolvedNode): Boolean {
@@ -1092,6 +1167,9 @@ class AndroidWebDavServer(
     ): ResolvedNode {
         var current = rootDocument
         for (segment in relativeSegments) {
+            if (current.isDirectory) {
+                recoverSafTransactions(current)
+            }
             current = current.findFile(segment) ?: return ResolvedNode(
                 root = root,
                 segments = fullSegments,
@@ -1138,6 +1216,7 @@ class AndroidWebDavServer(
         return when {
             node.directFile != null -> node.directFile.listFiles()
                 .orEmpty()
+                .filterNot { child -> DIRECT_STAGING_PATTERN.matches(child.name) }
                 .sortedWith(compareBy<File>({ !it.isDirectory }, { it.name.lowercase(Locale.US) }))
                 .map { child ->
                     ResolvedNode(
@@ -1151,19 +1230,23 @@ class AndroidWebDavServer(
                     )
                 }
 
-            node.safDocument != null -> node.safDocument.listFiles()
-                .sortedWith(compareBy<DocumentFile>({ !it.isDirectory }, { it.name.orEmpty().lowercase(Locale.US) }))
-                .map { child ->
-                    ResolvedNode(
-                        root = node.root,
-                        segments = baseSegments + child.name.orEmpty(),
-                        safDocument = child,
-                        exists = true,
-                        isDirectory = child.isDirectory,
-                        isVirtualRoot = false,
-                        isPublishedRootEntry = false,
-                    )
-                }
+            node.safDocument != null -> {
+                recoverSafTransactions(node.safDocument)
+                node.safDocument.listFiles()
+                    .filterNot { child -> isSafInternalTemporaryName(child.name.orEmpty()) }
+                    .sortedWith(compareBy<DocumentFile>({ !it.isDirectory }, { it.name.orEmpty().lowercase(Locale.US) }))
+                    .map { child ->
+                        ResolvedNode(
+                            root = node.root,
+                            segments = baseSegments + child.name.orEmpty(),
+                            safDocument = child,
+                            exists = true,
+                            isDirectory = child.isDirectory,
+                            isVirtualRoot = false,
+                            isPublishedRootEntry = false,
+                        )
+                    }
+            }
 
             else -> emptyList()
         }
@@ -1896,6 +1979,9 @@ class AndroidWebDavServer(
         const val HEADER_DROP_ME_LENGTH_RESPONSE = "X-DROPME-Length"
         const val HEADER_DROP_ME_SHA256_RESPONSE = "X-DROPME-SHA256"
         val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")
+        val SAF_TRANSACTION_PATTERN = Regex("^DROPME-([0-9a-fA-F-]{36})\\.txn$")
+        val SAF_STAGING_PATTERN = Regex("^DROPME-[0-9a-fA-F-]{36}\\.tmp$")
+        val DIRECT_STAGING_PATTERN = Regex("^\\.dropme-[0-9a-fA-F-]{36}\\.tmp$")
     }
 }
 
