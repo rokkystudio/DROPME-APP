@@ -281,6 +281,16 @@ class AndroidWebDavServer(
             return
         }
 
+        val currentEtag = buildEtag(node)
+        val ifMatch = request.headers["if-match"]?.trim().orEmpty()
+        if (ifMatch.isNotBlank() &&
+            ifMatch != "*" &&
+            ifMatch.split(',').none { candidate -> candidate.trim() == currentEtag }
+        ) {
+            writeSimpleResponse(output, 412, "Precondition Failed", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
+
         val length = node.contentLength().coerceAtLeast(0L)
         val requestedRange = request.headers["range"]?.let { parseByteRange(it, length) }
         if (request.headers.containsKey("range") && requestedRange == null) {
@@ -297,7 +307,7 @@ class AndroidWebDavServer(
             "Content-Type" to "application/octet-stream",
             "Content-Disposition" to "attachment; filename*=UTF-8''${Uri.encode(node.displayName)}",
             "Content-Length" to responseLength.toString(),
-            "ETag" to buildEtag(node),
+            "ETag" to currentEtag,
             "Accept-Ranges" to "bytes",
         )
         if (requestedRange != null) {
