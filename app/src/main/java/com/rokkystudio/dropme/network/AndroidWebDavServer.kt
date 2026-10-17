@@ -502,18 +502,33 @@ class AndroidWebDavServer(
         }
 
         val existing = resolvePath(request.path)
+        if (!validatePutPreconditions(request, existing)) {
+            writeSimpleResponse(output, 412, "Precondition Failed", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
         if (existing.exists && existing.isDirectory) {
             writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
 
-        val storedDigest = writeVerifiedPut(
-            parent = parentResolution.parent,
-            destinationName = parentResolution.childName,
-            input = input,
-            expectedLength = request.contentLength,
-            expectedSha256 = expectedSha256,
-        )
+        val storedDigest = try {
+            writeVerifiedPut(
+                parent = parentResolution.parent,
+                destinationName = parentResolution.childName,
+                input = input,
+                expectedLength = request.contentLength,
+                expectedSha256 = expectedSha256,
+                beforeCommit = {
+                    val current = resolvePath(request.path)
+                    if (!validatePutPreconditions(request, current)) {
+                        throw PutPreconditionFailedException()
+                    }
+                },
+            )
+        } catch (_: PutPreconditionFailedException) {
+            writeSimpleResponse(output, 412, "Precondition Failed", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
 
         val statusCode = if (existing.exists) 204 else 201
         val reason = if (existing.exists) "No Content" else "Created"
@@ -536,6 +551,7 @@ class AndroidWebDavServer(
         input: InputStream,
         expectedLength: Long,
         expectedSha256: String?,
+        beforeCommit: () -> Unit,
     ): StoredFileDigest {
         return when {
             parent.directFile != null -> writeVerifiedDirectPut(
@@ -544,6 +560,7 @@ class AndroidWebDavServer(
                 input = input,
                 expectedLength = expectedLength,
                 expectedSha256 = expectedSha256,
+                beforeCommit = beforeCommit,
             )
 
             parent.safDocument != null -> writeVerifiedSafPut(
@@ -552,6 +569,7 @@ class AndroidWebDavServer(
                 input = input,
                 expectedLength = expectedLength,
                 expectedSha256 = expectedSha256,
+                beforeCommit = beforeCommit,
             )
 
             else -> throw IOException("Destination parent is not writable")
@@ -564,6 +582,7 @@ class AndroidWebDavServer(
         input: InputStream,
         expectedLength: Long,
         expectedSha256: String?,
+        beforeCommit: () -> Unit,
     ): StoredFileDigest {
         val targetFile = File(parentDirectory, destinationName)
         val stagingFile = File(parentDirectory, ".dropme-${UUID.randomUUID()}.tmp")
@@ -574,6 +593,7 @@ class AndroidWebDavServer(
             }
             val digest = FileInputStream(stagingFile).use(::digestInputStream)
             validateStoredDigest(digest, expectedLength, expectedSha256)
+            beforeCommit()
             replaceDirectFile(stagingFile, targetFile)
             return digest
         } catch (throwable: Throwable) {
@@ -616,6 +636,7 @@ class AndroidWebDavServer(
         input: InputStream,
         expectedLength: Long,
         expectedSha256: String?,
+        beforeCommit: () -> Unit,
     ): StoredFileDigest {
         val existingDocument = parentDocument.findFile(destinationName)
         if (existingDocument?.isDirectory == true) {
@@ -632,6 +653,7 @@ class AndroidWebDavServer(
             val digest = context.contentResolver.openInputStream(stagingDocument.uri)?.use(::digestInputStream)
                 ?: throw IOException("Could not verify SAF staging document")
             validateStoredDigest(digest, expectedLength, expectedSha256)
+            beforeCommit()
             replaceSafDocument(parentDocument, stagingDocument, existingDocument, destinationName)
             return digest
         } catch (throwable: Throwable) {
@@ -671,6 +693,26 @@ class AndroidWebDavServer(
                 backupDocument.renameTo(destinationName)
             }
         }
+    }
+
+    private fun validatePutPreconditions(request: WebDavRequest, current: ResolvedNode): Boolean {
+        val currentEtag = if (current.exists) buildEtag(current) else null
+
+        val ifMatch = request.headers["if-match"]?.trim().orEmpty()
+        if (ifMatch.isNotBlank()) {
+            val matches = ifMatch == "*" && current.exists ||
+                currentEtag != null && ifMatch.split(',').any { candidate -> candidate.trim() == currentEtag }
+            if (!matches) return false
+        }
+
+        val ifNoneMatch = request.headers["if-none-match"]?.trim().orEmpty()
+        if (ifNoneMatch.isNotBlank()) {
+            val matches = ifNoneMatch == "*" && current.exists ||
+                currentEtag != null && ifNoneMatch.split(',').any { candidate -> candidate.trim() == currentEtag }
+            if (matches) return false
+        }
+
+        return true
     }
 
     private fun validateStoredDigest(
@@ -1742,6 +1784,8 @@ class AndroidWebDavServer(
         val headers: Map<String, String>,
         val contentLength: Long,
     )
+
+    private class PutPreconditionFailedException : IOException()
 
     private data class StoredFileDigest(
         val length: Long,
