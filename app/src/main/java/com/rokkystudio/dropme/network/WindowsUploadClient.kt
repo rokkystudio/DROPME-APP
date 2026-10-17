@@ -12,6 +12,7 @@ import okhttp3.RequestBody
 import okio.BufferedSink
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
@@ -130,12 +131,20 @@ class WindowsUploadClient(
         onProgress: ((uploadedBytes: Long, totalBytes: Long) -> Unit)? = null,
     ) {
         Log.d(LOG_TAG, "Share upload: ${file.displayName} -> ${server.host}:${server.tcpPort}")
+        val expectedSize = file.sizeBytes?.takeIf { it >= 0L }
+            ?: throw AppError.UploadFailed(
+                file.displayName,
+                "Не удалось определить размер файла ${file.displayName}",
+            ).asAppException()
+        val expectedSha256 = computeFileSha256(file)
         val encodedName = URLEncoder.encode(file.displayName, StandardCharsets.UTF_8.name())
         try {
             for (basePath in WindowsServerApi.basePaths) {
+                val requestBody = SharedFileRequestBody(sharedFileReader, file, onProgress)
                 val request = Request.Builder()
                     .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, "/upload?name=$encodedName"))
-                    .put(SharedFileRequestBody(sharedFileReader, file, onProgress))
+                    .header("X-DROPME-SHA256", expectedSha256)
+                    .put(requestBody)
                     .build()
                 client.newCall(request).execute().use { response ->
                     if (response.code == 404) {
@@ -152,6 +161,22 @@ class WindowsUploadClient(
                         }
                         throw AppError.UploadFailed(file.displayName, message).asAppException()
                     }
+
+                    val confirmedLength = response.header("X-DROPME-Length")?.toLongOrNull()
+                    val confirmedSha256 = response.header("X-DROPME-SHA256")?.trim()?.lowercase()
+                    val sentSha256 = requestBody.sha256
+                    if (confirmedLength != expectedSize ||
+                        requestBody.uploadedLength != expectedSize ||
+                        sentSha256 == null ||
+                        sentSha256 != expectedSha256 ||
+                        confirmedSha256 == null ||
+                        confirmedSha256 != expectedSha256
+                    ) {
+                        throw AppError.UploadFailed(
+                            file.displayName,
+                            "Сервер не подтвердил целостность файла ${file.displayName}",
+                        ).asAppException()
+                    }
                     return
                 }
             }
@@ -167,6 +192,22 @@ class WindowsUploadClient(
         }
     }
 
+    private fun computeFileSha256(file: SharedFileReader.SharedFile): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        sharedFileReader.openInputStream(file).use { inputStream ->
+            val buffer = ByteArray(UPLOAD_BUFFER_SIZE_BYTES)
+            while (true) {
+                val readBytes = inputStream.read(buffer)
+                if (readBytes < 0) break
+                if (readBytes == 0) continue
+                digest.update(buffer, 0, readBytes)
+            }
+        }
+        return digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+    }
+
     /**
      * Формирует HTTP body, читающий содержимое файла через ContentResolver.
      */
@@ -175,12 +216,19 @@ class WindowsUploadClient(
         private val file: SharedFileReader.SharedFile,
         private val onProgress: ((uploadedBytes: Long, totalBytes: Long) -> Unit)? = null,
     ) : RequestBody() {
+        var uploadedLength: Long = 0L
+            private set
+
+        var sha256: String? = null
+            private set
+
         override fun contentType() = OCTET_STREAM
 
         override fun contentLength(): Long = file.sizeBytes ?: -1L
 
         override fun writeTo(sink: BufferedSink) {
             val totalBytes = contentLength().coerceAtLeast(0L)
+            val digest = MessageDigest.getInstance("SHA-256")
             var uploadedBytes = 0L
             sharedFileReader.openInputStream(file).use { inputStream ->
                 val buffer = ByteArray(UPLOAD_BUFFER_SIZE_BYTES)
@@ -189,13 +237,21 @@ class WindowsUploadClient(
                     if (readBytes < 0) {
                         break
                     }
+                    if (readBytes == 0) {
+                        continue
+                    }
                     sink.write(buffer, 0, readBytes)
+                    digest.update(buffer, 0, readBytes)
                     uploadedBytes += readBytes
                     onProgress?.invoke(uploadedBytes, totalBytes)
                 }
                 if (uploadedBytes == 0L) {
                     onProgress?.invoke(0L, totalBytes)
                 }
+            }
+            uploadedLength = uploadedBytes
+            sha256 = digest.digest().joinToString("") { byte ->
+                (byte.toInt() and 0xff).toString(16).padStart(2, '0')
             }
         }
     }

@@ -29,6 +29,7 @@ import java.net.SocketTimeoutException
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
+import java.security.MessageDigest
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -52,6 +53,7 @@ class AndroidWebDavServer(
     )
 
     private val running = AtomicBoolean(false)
+    private val mutationLock = Any()
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
     private var clientExecutor: ExecutorService? = null
@@ -207,10 +209,10 @@ class AndroidWebDavServer(
                         }
                     }
                     "HEAD" -> handleGet(output, request, sendBody = false)
-                    "PUT" -> handlePut(output, request, input)
-                    "DELETE" -> handleDelete(output, request)
-                    "MKCOL" -> handleMkCol(output, request)
-                    "MOVE" -> handleMove(output, request)
+                    "PUT" -> synchronized(mutationLock) { handlePut(output, request, input) }
+                    "DELETE" -> synchronized(mutationLock) { handleDelete(output, request) }
+                    "MKCOL" -> synchronized(mutationLock) { handleMkCol(output, request) }
+                    "MOVE" -> synchronized(mutationLock) { handleMove(output, request) }
                     "LOCK" -> handleLock(output, request)
                     "UNLOCK" -> handleUnlock(output)
                     else -> writeSimpleResponse(output, 405, "Method Not Allowed", "text/plain; charset=utf-8", ByteArray(0))
@@ -467,8 +469,16 @@ class AndroidWebDavServer(
     }
 
     private fun handlePut(output: BufferedOutputStream, request: WebDavRequest, input: InputStream) {
-        if (request.contentLength < 0) {
+        if (request.contentLength < 0L) {
             writeSimpleResponse(output, 411, "Length Required", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
+
+        val expectedSha256 = request.headers[HEADER_DROP_ME_SHA256]
+            ?.trim()
+            ?.lowercase(Locale.US)
+        if (expectedSha256 != null && !expectedSha256.matches(SHA256_PATTERN)) {
+            writeSimpleResponse(output, 400, "Bad Request", "text/plain; charset=utf-8", ByteArray(0))
             return
         }
 
@@ -487,40 +497,183 @@ class AndroidWebDavServer(
             return
         }
 
-        when {
-            parentResolution.parent.directFile != null -> {
-                val parentDirectory = parentResolution.parent.directFile
-                val targetFile = File(parentDirectory, parentResolution.childName)
-                targetFile.parentFile?.mkdirs()
-                FileOutputStream(targetFile, false).use { fileOutput ->
-                    copyExactly(input, fileOutput, request.contentLength.toLong())
-                }
-            }
-
-            parentResolution.parent.safDocument != null -> {
-                val parentDocument = parentResolution.parent.safDocument
-                val existingDocument = parentDocument.findFile(parentResolution.childName)
-                if (existingDocument?.isDirectory == true) {
-                    writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
-                    return
-                }
-                val targetDocument = existingDocument
-                    ?: parentDocument.createFile("application/octet-stream", parentResolution.childName)
-                    ?: throw IOException("Could not create SAF document")
-                context.contentResolver.openOutputStream(targetDocument.uri, "rwt")?.use { stream ->
-                    copyExactly(input, stream, request.contentLength.toLong())
-                } ?: throw IOException("Could not open SAF output stream")
-            }
-
-            else -> {
-                writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
-                return
-            }
-        }
+        val storedDigest = writeVerifiedPut(
+            parent = parentResolution.parent,
+            destinationName = parentResolution.childName,
+            input = input,
+            expectedLength = request.contentLength,
+            expectedSha256 = expectedSha256,
+        )
 
         val statusCode = if (existing.exists) 204 else 201
         val reason = if (existing.exists) "No Content" else "Created"
-        writeSimpleResponse(output, statusCode, reason, "text/plain; charset=utf-8", ByteArray(0))
+        writeResponse(
+            output = output,
+            statusCode = statusCode,
+            reason = reason,
+            headers = linkedMapOf(
+                "Content-Length" to "0",
+                HEADER_DROP_ME_LENGTH_RESPONSE to storedDigest.length.toString(),
+                HEADER_DROP_ME_SHA256_RESPONSE to storedDigest.sha256,
+            ),
+            body = null,
+        )
+    }
+
+    private fun writeVerifiedPut(
+        parent: ResolvedNode,
+        destinationName: String,
+        input: InputStream,
+        expectedLength: Long,
+        expectedSha256: String?,
+    ): StoredFileDigest {
+        return when {
+            parent.directFile != null -> writeVerifiedDirectPut(
+                parentDirectory = parent.directFile,
+                destinationName = destinationName,
+                input = input,
+                expectedLength = expectedLength,
+                expectedSha256 = expectedSha256,
+            )
+
+            parent.safDocument != null -> writeVerifiedSafPut(
+                parentDocument = parent.safDocument,
+                destinationName = destinationName,
+                input = input,
+                expectedLength = expectedLength,
+                expectedSha256 = expectedSha256,
+            )
+
+            else -> throw IOException("Destination parent is not writable")
+        }
+    }
+
+    private fun writeVerifiedDirectPut(
+        parentDirectory: File,
+        destinationName: String,
+        input: InputStream,
+        expectedLength: Long,
+        expectedSha256: String?,
+    ): StoredFileDigest {
+        val targetFile = File(parentDirectory, destinationName)
+        val stagingFile = File(parentDirectory, ".dropme-${UUID.randomUUID()}.tmp")
+        try {
+            FileOutputStream(stagingFile, false).use { output ->
+                copyExactly(input, output, expectedLength)
+                output.fd.sync()
+            }
+            val digest = FileInputStream(stagingFile).use(::digestInputStream)
+            validateStoredDigest(digest, expectedLength, expectedSha256)
+            replaceDirectFile(stagingFile, targetFile)
+            return digest
+        } catch (throwable: Throwable) {
+            stagingFile.delete()
+            throw throwable
+        }
+    }
+
+    private fun replaceDirectFile(stagingFile: File, targetFile: File) {
+        targetFile.parentFile?.mkdirs()
+        if (!targetFile.exists()) {
+            if (!stagingFile.renameTo(targetFile)) {
+                throw IOException("Could not commit staged file")
+            }
+            return
+        }
+
+        val backupFile = File(targetFile.parentFile, ".dropme-${UUID.randomUUID()}.bak")
+        if (!targetFile.renameTo(backupFile)) {
+            throw IOException("Could not preserve existing destination file")
+        }
+        var committed = false
+        try {
+            if (!stagingFile.renameTo(targetFile)) {
+                throw IOException("Could not replace destination file")
+            }
+            committed = true
+        } finally {
+            if (committed) {
+                backupFile.delete()
+            } else {
+                backupFile.renameTo(targetFile)
+            }
+        }
+    }
+
+    private fun writeVerifiedSafPut(
+        parentDocument: DocumentFile,
+        destinationName: String,
+        input: InputStream,
+        expectedLength: Long,
+        expectedSha256: String?,
+    ): StoredFileDigest {
+        val existingDocument = parentDocument.findFile(destinationName)
+        if (existingDocument?.isDirectory == true) {
+            throw IOException("Destination is a directory")
+        }
+        val stagingName = "DROPME-${UUID.randomUUID()}.tmp"
+        val stagingDocument = parentDocument.createFile("application/octet-stream", stagingName)
+            ?: throw IOException("Could not create SAF staging document")
+        try {
+            context.contentResolver.openOutputStream(stagingDocument.uri, "rwt")?.use { output ->
+                copyExactly(input, output, expectedLength)
+            } ?: throw IOException("Could not open SAF staging output stream")
+
+            val digest = context.contentResolver.openInputStream(stagingDocument.uri)?.use(::digestInputStream)
+                ?: throw IOException("Could not verify SAF staging document")
+            validateStoredDigest(digest, expectedLength, expectedSha256)
+            replaceSafDocument(parentDocument, stagingDocument, existingDocument, destinationName)
+            return digest
+        } catch (throwable: Throwable) {
+            stagingDocument.delete()
+            throw throwable
+        }
+    }
+
+    private fun replaceSafDocument(
+        parentDocument: DocumentFile,
+        stagingDocument: DocumentFile,
+        existingDocument: DocumentFile?,
+        destinationName: String,
+    ) {
+        if (existingDocument == null) {
+            if (!stagingDocument.renameTo(destinationName)) {
+                throw IOException("Could not commit SAF staging document")
+            }
+            return
+        }
+
+        val backupName = "DROPME-${UUID.randomUUID()}.bak"
+        if (!existingDocument.renameTo(backupName)) {
+            throw IOException("Could not preserve existing SAF destination")
+        }
+        val backupDocument = parentDocument.findFile(backupName) ?: existingDocument
+        var committed = false
+        try {
+            if (!stagingDocument.renameTo(destinationName)) {
+                throw IOException("Could not replace SAF destination")
+            }
+            committed = true
+        } finally {
+            if (committed) {
+                backupDocument.delete()
+            } else {
+                backupDocument.renameTo(destinationName)
+            }
+        }
+    }
+
+    private fun validateStoredDigest(
+        digest: StoredFileDigest,
+        expectedLength: Long,
+        expectedSha256: String?,
+    ) {
+        if (digest.length != expectedLength) {
+            throw IOException("Stored file length mismatch: expected=$expectedLength actual=${digest.length}")
+        }
+        if (expectedSha256 != null && digest.sha256 != expectedSha256) {
+            throw IOException("Stored file SHA-256 mismatch")
+        }
     }
 
     private fun handleDelete(output: BufferedOutputStream, request: WebDavRequest) {
@@ -576,7 +729,8 @@ class AndroidWebDavServer(
     }
 
     private fun handleMove(output: BufferedOutputStream, request: WebDavRequest) {
-        val source = resolvePath(request.path)
+        val sourcePath = normalizeRequestPath(request.path)
+        val source = resolvePath(sourcePath)
         if (!source.exists) {
             writeSimpleResponse(output, 404, "Not Found", "text/plain; charset=utf-8", ByteArray(0))
             return
@@ -592,6 +746,11 @@ class AndroidWebDavServer(
             return
         }
         val destinationPath = normalizeRequestPath(destinationHeader)
+        if (destinationPath == sourcePath) {
+            writeSimpleResponse(output, 204, "No Content", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
+
         val destinationParent = resolveParentPath(destinationPath) ?: run {
             writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
             return
@@ -604,6 +763,7 @@ class AndroidWebDavServer(
 
         val destinationNode = resolvePath(destinationPath)
         val overwrite = request.headers["overwrite"]?.equals("T", ignoreCase = true) ?: true
+        var destinationBackup: ResolvedNode? = null
         if (destinationNode.exists) {
             if (!overwrite) {
                 writeSimpleResponse(output, 412, "Precondition Failed", "text/plain; charset=utf-8", ByteArray(0))
@@ -613,19 +773,18 @@ class AndroidWebDavServer(
                 writeSimpleResponse(output, 403, "Forbidden", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
-            val deleted = when {
-                destinationNode.directFile != null -> deleteDirect(destinationNode.directFile)
-                destinationNode.safDocument != null -> deleteSaf(destinationNode.safDocument)
-                else -> false
-            }
-            if (!deleted) {
+            destinationBackup = moveDestinationToBackup(destinationNode, destinationParent.parent)
+            if (destinationBackup == null) {
                 writeSimpleResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
         }
 
         val moved = if (sameRoot) {
-            val sourceParent = resolveParentPath(request.path) ?: run {
+            val sourceParent = resolveParentPath(sourcePath) ?: run {
+                destinationBackup?.let {
+                    restoreDestinationBackup(it, destinationParent.parent, destinationParent.childName)
+                }
                 writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
@@ -650,9 +809,19 @@ class AndroidWebDavServer(
         } else {
             copyNode(source, destinationParent.parent, destinationParent.childName) && deleteNode(source)
         }
+
         if (!moved) {
+            destinationBackup?.let {
+                restoreDestinationBackup(it, destinationParent.parent, destinationParent.childName)
+            }
             writeSimpleResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
             return
+        }
+
+        destinationBackup?.let { backup ->
+            if (!deleteNode(backup)) {
+                Log.d(LOG_TAG, "Could not delete MOVE destination backup ${backup.displayName}")
+            }
         }
         writeSimpleResponse(output, 201, "Created", "text/plain; charset=utf-8", ByteArray(0))
     }
@@ -712,7 +881,7 @@ class AndroidWebDavServer(
             path = normalizeRequestPath(parts[1]),
             query = parts[1].substringAfter('?', ""),
             headers = headers,
-            contentLength = headers["content-length"]?.toIntOrNull() ?: 0,
+            contentLength = headers["content-length"]?.toLongOrNull() ?: -1L,
         )
     }
 
@@ -1062,18 +1231,35 @@ class AndroidWebDavServer(
         return try {
             if (source.isDirectory) {
                 val createdDirectory = createDestinationDirectory(destinationParent, destinationName) ?: return false
-                sourceChildren(source).all { child ->
+                val copied = sourceChildren(source).all { child ->
                     copyNode(child, createdDirectory, child.displayName)
                 }
+                if (!copied) {
+                    deleteNode(createdDirectory)
+                }
+                copied
             } else {
-                openInputStream(source).use { input ->
+                val sourceDigest = openInputStream(source).use { input ->
                     openDestinationOutputStream(destinationParent, destinationName).use { output ->
-                        input.copyTo(output)
+                        copyWithDigest(input, output)
                     }
                 }
-                true
+                val destination = resolveChildNode(destinationParent, destinationName)
+                    ?: return false
+                val destinationDigest = openInputStream(destination).use(::digestInputStream)
+                val verified = sourceDigest == destinationDigest
+                if (!verified) {
+                    Log.d(
+                        LOG_TAG,
+                        "copyNode integrity mismatch from ${source.displayName} to $destinationName " +
+                            "source=$sourceDigest destination=$destinationDigest",
+                    )
+                    deleteNode(destination)
+                }
+                verified
             }
         } catch (throwable: Throwable) {
+            resolveChildNode(destinationParent, destinationName)?.let(::deleteNode)
             Log.d(LOG_TAG, "copyNode failed from ${source.displayName} to $destinationName", throwable)
             false
         }
@@ -1107,6 +1293,35 @@ class AndroidWebDavServer(
 
             else -> emptyList()
         }
+    }
+
+    private fun resolveChildNode(parent: ResolvedNode, name: String): ResolvedNode? {
+        parent.directFile?.let { directory ->
+            val child = File(directory, name)
+            if (!child.exists()) return null
+            return ResolvedNode(
+                root = parent.root,
+                segments = parent.segments + name,
+                directFile = child,
+                exists = true,
+                isDirectory = child.isDirectory,
+                isVirtualRoot = false,
+                isPublishedRootEntry = false,
+            )
+        }
+        parent.safDocument?.let { directory ->
+            val child = directory.findFile(name) ?: return null
+            return ResolvedNode(
+                root = parent.root,
+                segments = parent.segments + name,
+                safDocument = child,
+                exists = true,
+                isDirectory = child.isDirectory,
+                isVirtualRoot = false,
+                isPublishedRootEntry = false,
+            )
+        }
+        return null
     }
 
     private fun createDestinationDirectory(parent: ResolvedNode, name: String): ResolvedNode? {
@@ -1161,6 +1376,51 @@ class AndroidWebDavServer(
         }
     }
 
+    private fun moveDestinationToBackup(node: ResolvedNode, parent: ResolvedNode): ResolvedNode? {
+        val backupName = "DROPME-${UUID.randomUUID()}.bak"
+        node.directFile?.let { file ->
+            val parentDirectory = parent.directFile ?: return null
+            val backupFile = File(parentDirectory, backupName)
+            if (!file.renameTo(backupFile)) return null
+            return ResolvedNode(
+                root = parent.root,
+                segments = parent.segments + backupName,
+                directFile = backupFile,
+                exists = true,
+                isDirectory = backupFile.isDirectory,
+                isVirtualRoot = false,
+                isPublishedRootEntry = false,
+            )
+        }
+        node.safDocument?.let { document ->
+            val parentDocument = parent.safDocument ?: return null
+            if (!document.renameTo(backupName)) return null
+            val backupDocument = parentDocument.findFile(backupName) ?: document
+            return ResolvedNode(
+                root = parent.root,
+                segments = parent.segments + backupName,
+                safDocument = backupDocument,
+                exists = true,
+                isDirectory = backupDocument.isDirectory,
+                isVirtualRoot = false,
+                isPublishedRootEntry = false,
+            )
+        }
+        return null
+    }
+
+    private fun restoreDestinationBackup(backup: ResolvedNode, parent: ResolvedNode, destinationName: String): Boolean {
+        resolveChildNode(parent, destinationName)?.let(::deleteNode)
+        backup.directFile?.let { backupFile ->
+            val parentDirectory = parent.directFile ?: return false
+            return backupFile.renameTo(File(parentDirectory, destinationName))
+        }
+        backup.safDocument?.let { backupDocument ->
+            return backupDocument.renameTo(destinationName)
+        }
+        return false
+    }
+
     private fun moveSafDocument(
         sourceDocument: DocumentFile,
         sourceParent: DocumentFile,
@@ -1168,23 +1428,38 @@ class AndroidWebDavServer(
         destinationName: String,
     ): Boolean {
         return try {
-            var currentUri = if (sourceParent.uri == destinationParent.uri) {
-                sourceDocument.uri
-            } else {
-                DocumentsContract.moveDocument(
+            val movedAcrossParents = sourceParent.uri != destinationParent.uri
+            var currentUri = sourceDocument.uri
+            if (movedAcrossParents) {
+                currentUri = DocumentsContract.moveDocument(
                     context.contentResolver,
                     sourceDocument.uri,
                     sourceParent.uri,
                     destinationParent.uri,
                 ) ?: return false
             }
+
             val currentName = sourceDocument.name.orEmpty()
             if (currentName != destinationName) {
-                currentUri = DocumentsContract.renameDocument(
+                val renamedUri = DocumentsContract.renameDocument(
                     context.contentResolver,
                     currentUri,
                     destinationName,
-                ) ?: return false
+                )
+                if (renamedUri == null) {
+                    if (movedAcrossParents) {
+                        runCatching {
+                            DocumentsContract.moveDocument(
+                                context.contentResolver,
+                                currentUri,
+                                destinationParent.uri,
+                                sourceParent.uri,
+                            )
+                        }
+                    }
+                    return false
+                }
+                currentUri = renamedUri
             }
             currentUri != Uri.EMPTY
         } catch (throwable: Throwable) {
@@ -1292,6 +1567,48 @@ class AndroidWebDavServer(
             }
         }
         return ByteArray(bytes.size) { index -> bytes[index] }.toString(StandardCharsets.UTF_8)
+    }
+
+    private fun digestInputStream(input: InputStream): StoredFileDigest {
+        val messageDigest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var length = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (read == 0) continue
+            messageDigest.update(buffer, 0, read)
+            length += read.toLong()
+        }
+        return StoredFileDigest(
+            length = length,
+            sha256 = messageDigest.digest().joinToString("") { byte ->
+                (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+            },
+        )
+    }
+
+    private fun copyWithDigest(input: InputStream, output: OutputStream): StoredFileDigest {
+        val messageDigest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var length = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            if (read == 0) continue
+            output.write(buffer, 0, read)
+            messageDigest.update(buffer, 0, read)
+            length += read.toLong()
+        }
+        if (output is FileOutputStream) {
+            output.fd.sync()
+        }
+        return StoredFileDigest(
+            length = length,
+            sha256 = messageDigest.digest().joinToString("") { byte ->
+                (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+            },
+        )
     }
 
     private fun copyExactly(input: InputStream, output: OutputStream, byteCount: Long) {
@@ -1404,7 +1721,12 @@ class AndroidWebDavServer(
         val path: String,
         val query: String,
         val headers: Map<String, String>,
-        val contentLength: Int,
+        val contentLength: Long,
+    )
+
+    private data class StoredFileDigest(
+        val length: Long,
+        val sha256: String,
     )
 
     private data class ByteRange(
@@ -1421,6 +1743,10 @@ class AndroidWebDavServer(
         const val WINFSP_DOWNLOAD_URL = "https://github.com/rokkystudio/DROPME-WIN/raw/refs/heads/master/Files/winfsp-2.2.26215.msi"
         const val API_META_PATH = "/.dropmefs/meta"
         const val API_LIST_PATH = "/.dropmefs/list"
+        const val HEADER_DROP_ME_SHA256 = "x-dropme-sha256"
+        const val HEADER_DROP_ME_LENGTH_RESPONSE = "X-DROPME-Length"
+        const val HEADER_DROP_ME_SHA256_RESPONSE = "X-DROPME-SHA256"
+        val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")
     }
 }
 
