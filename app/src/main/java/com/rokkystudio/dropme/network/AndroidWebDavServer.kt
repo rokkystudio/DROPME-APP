@@ -1240,14 +1240,17 @@ class AndroidWebDavServer(
     private fun copyNode(source: ResolvedNode, destinationParent: ResolvedNode, destinationName: String): Boolean {
         return try {
             if (source.isDirectory) {
+                val sourceChildrenBefore = sourceChildren(source)
+                val sourceSnapshot = sourceChildrenBefore.toChildSnapshot()
                 val createdDirectory = createDestinationDirectory(destinationParent, destinationName) ?: return false
-                val copied = sourceChildren(source).all { child ->
+                val copied = sourceChildrenBefore.all { child ->
                     copyNode(child, createdDirectory, child.displayName)
                 }
-                if (!copied) {
+                val sourceUnchanged = copied && sourceChildren(source).toChildSnapshot() == sourceSnapshot
+                if (!sourceUnchanged) {
                     deleteNode(createdDirectory)
                 }
-                copied
+                sourceUnchanged
             } else {
                 val sourceDigest = openInputStream(source).use { input ->
                     openDestinationOutputStream(destinationParent, destinationName).use { output ->
@@ -1257,12 +1260,13 @@ class AndroidWebDavServer(
                 val destination = resolveChildNode(destinationParent, destinationName)
                     ?: return false
                 val destinationDigest = openInputStream(destination).use(::digestInputStream)
-                val verified = sourceDigest == destinationDigest
+                val currentSourceDigest = openInputStream(source).use(::digestInputStream)
+                val verified = sourceDigest == destinationDigest && sourceDigest == currentSourceDigest
                 if (!verified) {
                     Log.d(
                         LOG_TAG,
                         "copyNode integrity mismatch from ${source.displayName} to $destinationName " +
-                            "source=$sourceDigest destination=$destinationDigest",
+                            "copied=$sourceDigest destination=$destinationDigest currentSource=$currentSourceDigest",
                     )
                     deleteNode(destination)
                 }
@@ -1273,6 +1277,11 @@ class AndroidWebDavServer(
             Log.d(LOG_TAG, "copyNode failed from ${source.displayName} to $destinationName", throwable)
             false
         }
+    }
+
+    private fun List<ResolvedNode>.toChildSnapshot(): List<Pair<String, Boolean>> {
+        return map { child -> child.displayName to child.isDirectory }
+            .sortedWith(compareBy<Pair<String, Boolean>>({ it.first.lowercase(Locale.US) }, { it.second }))
     }
 
     private fun sourceChildren(source: ResolvedNode): List<ResolvedNode> {
