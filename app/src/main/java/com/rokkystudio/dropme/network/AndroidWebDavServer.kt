@@ -204,6 +204,8 @@ class AndroidWebDavServer(
                             handleApiMeta(output, request)
                         } else if (request.path == API_LIST_PATH) {
                             handleApiList(output, request)
+                        } else if (request.path == API_DIGEST_PATH) {
+                            synchronized(mutationLock) { handleApiDigest(output, request) }
                         } else {
                             handleGet(output, request, sendBody = true)
                         }
@@ -342,6 +344,44 @@ class AndroidWebDavServer(
             append("writable=").append(if (node.isWritable) "1" else "0").append('\n')
             append("name=").append(Uri.encode(node.displayName)).append('\n')
             append("etag=").append(Uri.encode(buildEtag(node))).append('\n')
+        }.toByteArray(StandardCharsets.UTF_8)
+        writeResponse(
+            output,
+            200,
+            "OK",
+            linkedMapOf(
+                "Content-Type" to "text/plain; charset=utf-8",
+                "Content-Length" to body.size.toString(),
+            ),
+            body,
+        )
+    }
+
+    private fun handleApiDigest(output: BufferedOutputStream, request: WebDavRequest) {
+        val targetPath = parseQueryParams(request.query)["path"].orEmpty().ifBlank { "/" }
+        val node = resolvePath(targetPath)
+        if (!node.exists) {
+            writeSimpleResponse(output, 404, "Not Found", "text/plain; charset=utf-8", "ok=0\nerror=not_found\n".toByteArray(StandardCharsets.UTF_8))
+            return
+        }
+        if (node.isDirectory) {
+            writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", "ok=0\nerror=is_directory\n".toByteArray(StandardCharsets.UTF_8))
+            return
+        }
+
+        val etagBefore = buildEtag(node)
+        val digest = openInputStream(node).use(::digestInputStream)
+        val current = resolvePath(targetPath)
+        if (!current.exists || current.isDirectory || buildEtag(current) != etagBefore) {
+            writeSimpleResponse(output, 409, "Conflict", "text/plain; charset=utf-8", "ok=0\nerror=changed_during_hash\n".toByteArray(StandardCharsets.UTF_8))
+            return
+        }
+
+        val body = buildString {
+            append("ok=1\n")
+            append("length=").append(digest.length).append('\n')
+            append("sha256=").append(digest.sha256).append('\n')
+            append("etag=").append(Uri.encode(etagBefore)).append('\n')
         }.toByteArray(StandardCharsets.UTF_8)
         writeResponse(
             output,
@@ -1806,6 +1846,7 @@ class AndroidWebDavServer(
         const val WINFSP_DOWNLOAD_URL = "https://github.com/rokkystudio/DROPME-WIN/raw/refs/heads/master/Files/winfsp-2.2.26215.msi"
         const val API_META_PATH = "/.dropmefs/meta"
         const val API_LIST_PATH = "/.dropmefs/list"
+        const val API_DIGEST_PATH = "/.dropmefs/digest"
         const val HEADER_DROP_ME_SHA256 = "x-dropme-sha256"
         const val HEADER_DROP_ME_LENGTH_RESPONSE = "X-DROPME-Length"
         const val HEADER_DROP_ME_SHA256_RESPONSE = "X-DROPME-SHA256"
