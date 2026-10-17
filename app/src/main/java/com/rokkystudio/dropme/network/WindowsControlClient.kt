@@ -230,7 +230,7 @@ class WindowsControlClient(
 
     private companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        const val PROTOCOL_VERSION = 1
+        const val PROTOCOL_VERSION = 2
         const val CONNECT_TIMEOUT_MS = 3_000L
         const val READ_TIMEOUT_MS = 3_000L
         const val LOG_TAG = "DROPME"

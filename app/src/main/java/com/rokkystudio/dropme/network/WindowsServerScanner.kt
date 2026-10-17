@@ -150,7 +150,7 @@ class WindowsServerScanner {
                 return null
             }
             val protocolVersion = json.optInt("protocolVersion", -1)
-            if (protocolVersion != 1) {
+            if (protocolVersion != 2) {
                 return null
             }
 
