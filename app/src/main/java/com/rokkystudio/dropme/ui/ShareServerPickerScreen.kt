@@ -12,7 +12,7 @@ import com.rokkystudio.dropme.R
 import com.rokkystudio.dropme.network.WindowsServer
 
 /**
- * Отображает список найденных Windows-серверов для выбора получателя Share.
+ * Отображает найденные DROPME-устройства с именем, текущим IP и постоянным device ID.
  */
 class ShareServerPickerScreen(
     private val context: Context,
@@ -23,7 +23,7 @@ class ShareServerPickerScreen(
     private val inflater = LayoutInflater.from(context)
 
     /**
-     * Показывает список серверов и обрабатывает выбор пользователя.
+     * Показывает список устройств и обрабатывает выбор пользователя.
      */
     fun show(servers: List<WindowsServer>) {
         when {
@@ -53,7 +53,12 @@ class ShareServerPickerScreen(
                         val titleView = view.findViewById<TextView>(android.R.id.text1)
                         val subtitleView = view.findViewById<TextView>(android.R.id.text2)
                         titleView.text = context.getString(R.string.share_server_row_title, server.deviceName)
-                        subtitleView.text = context.getString(R.string.share_server_row_subtitle, server.host, server.tcpPort)
+                        subtitleView.text = context.getString(
+                            R.string.share_server_row_subtitle,
+                            server.host,
+                            server.tcpPort,
+                            server.deviceId,
+                        )
                         return view
                     }
                 }
@@ -70,7 +75,11 @@ class ShareServerPickerScreen(
         row.findViewById<TextView>(R.id.shareServerRowTitle).text =
             context.getString(R.string.share_server_row_title, server.deviceName)
         row.findViewById<TextView>(R.id.shareServerRowSubtitle).text =
-            context.getString(R.string.share_server_row_subtitle, server.host, server.tcpPort)
+            context.getString(
+                R.string.share_server_row_subtitle,
+                server.host,
+                server.tcpPort,
+                server.deviceId,
+            )
     }
 }
-

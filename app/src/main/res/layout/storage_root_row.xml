@@ -3,15 +3,22 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
-    android:minHeight="36dp"
+    android:minHeight="44dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="8dp"
+    android:paddingHorizontal="4dp"
     android:paddingVertical="4dp">
+
+    <CheckBox
+        android:id="@+id/storageRootEnabled"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:buttonTint="@color/action_button_text_color" />
 
     <ImageView
         android:id="@+id/storageRootIcon"
-        android:layout_width="16dp"
-        android:layout_height="16dp"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_marginStart="4dp"
         android:contentDescription="@null"
         android:src="@drawable/ic_storage_card" />
 
@@ -40,4 +47,13 @@
             android:textColor="@color/text_secondary"
             android:textSize="10sp" />
     </LinearLayout>
+
+    <badfox.logic.neoui.NeoIconButtonView
+        android:id="@+id/storageRootRemove"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_marginStart="6dp"
+        android:contentDescription="@string/storage_remove_folder"
+        android:src="@drawable/neo_ic_remove"
+        android:visibility="gone" />
 </LinearLayout>

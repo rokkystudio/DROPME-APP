@@ -7,7 +7,7 @@
     <string name="main_activity_stage_one_description">Отправка файлов из меню «Поделиться» Android в DROPME для Windows по локальной сети Wi‑Fi.</string>
     <string name="main_status_preparing">Подготовка Wi‑Fi подключения…</string>
     <string name="main_status_scanning">Поиск Windows-серверов DROPME…</string>
-    <string name="main_status_network_scanning">Сканирование сети</string>
+    <string name="main_status_network_scanning">Устройства в сети</string>
     <string name="main_no_servers_found">Серверов не обнаружено</string>
     <string name="main_status_scanning_detail">Сканирование локальной Wi‑Fi подсети по IP-адресам.</string>
     <string name="main_status_scanning_host">Текущий IP: %1$s</string>
@@ -29,7 +29,11 @@
     <string name="service_notification_connecting_text">Подключение к %1$s и запуск WebDAV.</string>
     <string name="service_notification_connected_title">DROPME активен</string>
     <string name="service_notification_connected_text">Хранилище Android подключено к %1$s.</string>
-    <string name="main_storage_roots_title">Доступ к хранилищам</string>
+    <string name="main_storage_roots_title">Мои хранилища</string>
+    <string name="storage_custom_folder">Папка</string>
+    <string name="storage_add_folder">Добавить папку</string>
+    <string name="storage_add_failed">Не удалось добавить папку</string>
+    <string name="storage_remove_folder">Удалить папку</string>
     <string name="main_error_no_storage_roots_ready">Перед подключением к Windows предоставьте доступ к хранилищу.</string>
     <string name="main_storage_access_denied">Доступ к хранилищу не предоставлен.</string>
     <string name="storage_access_granted">Доступ предоставлен</string>
@@ -94,7 +98,7 @@
     <string name="share_result_summary_canceled">Отправлено на %1$s. Отправлено: %2$d, отменено: %3$d.</string>
     <string name="share_section_files">Файлы</string>
     <string name="share_server_row_title">%1$s</string>
-    <string name="share_server_row_subtitle">%1$s:%2$d</string>
+    <string name="share_server_row_subtitle">%1$s:%2$d • ID: %3$s</string>
     <string name="share_file_status_pending">Ожидает отправки</string>
     <string name="share_file_status_uploading">Отправка…</string>
     <string name="share_file_status_success">Отправлен</string>
@@ -102,4 +106,46 @@
     <string name="share_file_status_canceled">Отменён</string>
     <string name="share_progress_percent_and_bytes">%1$d%% • %2$s / %3$s</string>
     <string name="share_progress_bytes_only">Передано: %1$s</string>
-</resources>
+    <string name="device_service_notification_title">DROPME доступен в сети</string>
+    <string name="device_service_starting">Запуск сетевого сервиса…</string>
+    <string name="device_service_active_with_files">%1$s:%2$d • файловый доступ включён</string>
+    <string name="device_service_active_without_files">%1$s:%2$d • ожидается доступ к хранилищу</string>
+    <string name="device_service_error">Не удалось запустить сетевой сервис</string>
+    <string name="device_service_action_stop">Отключить доступность</string>
+    <string name="device_service_channel_name">Сетевой сервис DROPME</string>
+    <string name="device_service_channel_description">Делает это устройство доступным другим устройствам DROPME в локальной Wi‑Fi сети.</string>    <string name="main_header_subtitle">Устройства и файлы</string>
+    <string name="main_this_device_title">Мое устройство</string>
+    <string name="main_device_name_hint">Имя устройства</string>
+    <string name="main_device_ip">IP: %1$s</string>
+    <string name="main_device_ip_unavailable">недоступен</string>
+    <string name="main_device_id">ID: %1$s</string>
+    <string name="main_device_service_enabled">Доступно другим устройствам</string>
+    <string name="main_save_device_name">Сохранить</string>
+    <string name="main_device_name_required">Введите имя устройства</string>
+    <string name="main_device_name_saved">Имя устройства сохранено</string>
+    <string name="main_no_devices_found">Устройства DROPME не обнаружены</string>
+    <string name="main_remote_files_unavailable">Это устройство не предоставляет доступ к файлам</string>
+    <string name="remote_files_title">Файлы</string>
+    <string name="remote_files_device_info">IP: %1$s • ID: %2$s</string>
+    <string name="remote_files_up">Наверх</string>
+    <string name="remote_files_empty">Папка пуста</string>
+    <string name="remote_files_folder">Папка</string>
+    <string name="remote_files_load_failed">Не удалось загрузить список файлов</string>
+    <string name="remote_files_download_failed">Не удалось скачать файл</string>
+    <string name="remote_files_downloaded">Сохранено в %1$s</string>    <string name="approval_title">Входящий запрос DROPME</string>
+    <string name="approval_message_share">%1$s хочет отправить файлы.\n\nIP: %2$s\nID: %3$s</string>
+    <string name="approval_message_files">%1$s хочет получить доступ к файлам этого устройства.\n\nIP: %2$s\nID: %3$s</string>
+    <string name="approval_item_name">Объект: %1$s</string>
+    <string name="approval_remember">Запомнить это решение</string>
+    <string name="approval_allow">Разрешить</string>
+    <string name="approval_deny">Отклонить</string>
+    <string name="approval_notification_title">Требуется разрешение DROPME</string>
+    <string name="approval_notification_text">%1$s (%2$s) ожидает разрешения</string>
+    <string name="approval_channel_name">Разрешения DROPME</string>
+    <string name="approval_channel_description">Запросы разрешения входящих подключений и передачи файлов.</string>    <string name="main_known_devices_title">Известные устройства</string>
+    <string name="main_allowed_devices_title">Разрешённые</string>
+    <string name="main_blocked_devices_title">Заблокированные</string>
+    <string name="main_trust_list_empty">Список пуст</string>
+    <string name="main_known_device_info">IP: %1$s • ID: %2$s</string>
+    <string name="main_trust_allow">Разрешить</string>
+    <string name="main_trust_block">Заблокировать</string></resources>

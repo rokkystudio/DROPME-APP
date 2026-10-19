@@ -26,7 +26,10 @@ import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WindowsUploadClient
 import com.rokkystudio.dropme.storage.SharedFileReader
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
+import badfox.logic.neoui.NeoButtonView
 import badfox.logic.neoui.NeoTopBarView
+import badfox.logic.neoui.NeoThemeMode
+import badfox.logic.neoui.NeoUiSettings
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -76,15 +79,15 @@ class ShareActivity : AppCompatActivity() {
     private lateinit var serverListContainer: LinearLayout
     private lateinit var fileListTitle: TextView
     private lateinit var fileListContainer: LinearLayout
-    private lateinit var retryButton: Button
-    private lateinit var closeButton: Button
+    private lateinit var retryButton: NeoButtonView
+    private lateinit var closeButton: NeoButtonView
 
     private lateinit var wifiNetworkProvider: WifiNetworkProvider
     private lateinit var wifiDropScanner: WindowsServerScanner
     private lateinit var sharedFileReader: SharedFileReader
     private lateinit var windowsUploadClient: WindowsUploadClient
     private lateinit var serverPickerScreen: ShareServerPickerScreen
-    private lateinit var uiSettings: UiSettings
+    private lateinit var neoUiSettings: NeoUiSettings
 
     private var sharedFiles: List<SharedFileReader.SharedFile> = emptyList()
     private var lastWifiInfo: WifiNetworkProvider.WifiNetworkInfo? = null
@@ -119,8 +122,7 @@ class ShareActivity : AppCompatActivity() {
         bindViews()
         bindDependencies()
         bindActions()
-        renderThemeToggle()
-        renderLanguageFlag()
+        bindNeoTopBar()
         bindBackNavigation()
         startShareFlow()
     }
@@ -165,7 +167,12 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private fun bindDependencies() {
-        uiSettings = UiSettings(this)
+        neoUiSettings = NeoUiSettings(
+            context = this,
+            preferencesName = NEO_UI_PREFERENCES_NAME,
+            defaultTheme = NeoThemeMode.DARK,
+            defaultLanguageTag = null,
+        )
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
         wifiDropScanner = WindowsServerScanner()
         sharedFileReader = SharedFileReader(applicationContext)
@@ -224,14 +231,14 @@ class ShareActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun renderThemeToggle() {
+    private fun bindNeoTopBar() {
         neoTopBar.setAppInfo(
             title = getString(R.string.app_name),
             subtitle = getString(R.string.share_header_subtitle),
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )
-        uiSettings.bindTopBarUi(neoTopBar)
+        neoUiSettings.bindTopBar(neoTopBar)
     }
     private fun toggleTheme() = Unit
 
@@ -771,6 +778,7 @@ class ShareActivity : AppCompatActivity() {
     }
 
     private companion object {
+        const val NEO_UI_PREFERENCES_NAME = "dropme_ui"
         const val MAX_PROGRESS = 100
         const val SCAN_INTERVAL_MS = 10_000L
     }

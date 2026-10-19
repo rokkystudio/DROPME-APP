@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Выполняет HTTP-поиск Windows DROPME Server в Wi‑Fi подсети устройства.
+ * Выполняет HTTP-поиск DROPME-устройств в Wi-Fi подсети устройства.
  */
 class WindowsServerScanner {
     /**
@@ -29,7 +29,7 @@ class WindowsServerScanner {
     )
 
     /**
-     * Сканирует подсеть и возвращает найденные Windows-серверы.
+     * Сканирует подсеть и возвращает найденные DROPME-устройства.
      */
     fun scan(
         wifiInfo: WifiNetworkProvider.WifiNetworkInfo,
@@ -39,7 +39,7 @@ class WindowsServerScanner {
     ): List<WindowsServer> {
         val candidateHosts = buildCandidateHosts(wifiInfo.ipv4Address, wifiInfo.prefixLength)
         if (candidateHosts.size > MAX_SCAN_HOSTS) {
-            throw AppError.UnknownError("Подсеть Wi‑Fi слишком большая для быстрого поиска сервера").asAppException()
+            throw AppError.UnknownError("Подсеть Wi-Fi слишком большая для быстрого поиска устройств").asAppException()
         }
 
         Log.d(LOG_TAG, "Старт scan по ${candidateHosts.size} адресам")
@@ -65,9 +65,9 @@ class WindowsServerScanner {
                         return@submit
                     }
                     fetchServer(client, host)?.let { server ->
-                        val existing = results.putIfAbsent(server.host, server)
-                        if (existing == null) {
-                            onServerFound?.invoke(results.values.sortedWith(compareBy({ it.deviceName.lowercase() }, { it.host })))
+                        val existing = results.put(server.deviceId, server)
+                        if (existing != server) {
+                            onServerFound?.invoke(sortedDevices(results.values))
                         }
                     }
                     onProgress?.invoke(
@@ -89,7 +89,7 @@ class WindowsServerScanner {
             }
         } catch (throwable: Throwable) {
             throw throwable.toAppError(
-                AppError.UnknownError("Не удалось завершить поиск серверов DROPME"),
+                AppError.UnknownError("Не удалось завершить поиск устройств DROPME"),
             ).asAppException(throwable)
         } finally {
             executor.shutdownNow()
@@ -97,16 +97,19 @@ class WindowsServerScanner {
             client.connectionPool.evictAll()
         }
 
-        val servers = results.values.sortedWith(compareBy({ it.deviceName.lowercase() }, { it.host }))
-        Log.d(LOG_TAG, "Найдено серверов: ${servers.size}")
+        val servers = sortedDevices(results.values)
+        Log.d(LOG_TAG, "Найдено устройств: ${servers.size}")
         servers.forEach { server ->
-            Log.d(LOG_TAG, "Сервер ${server.deviceName} ${server.host}:${server.tcpPort}")
+            Log.d(
+                LOG_TAG,
+                "Устройство ${server.deviceName} ${server.host}:${server.tcpPort} id=${server.deviceId} type=${server.deviceType}",
+            )
         }
         return servers
     }
 
     /**
-     * Выполняет HTTP-запрос к одному IP-адресу и проверяет протокольный ответ.
+     * Выполняет HTTP-запрос к одному IP-адресу и проверяет DROPME protocol v3 identity.
      */
     private fun fetchServer(client: OkHttpClient, host: String): WindowsServer? {
         return try {
@@ -138,7 +141,7 @@ class WindowsServerScanner {
     }
 
     /**
-     * Преобразует JSON-ответ сервера в модель WindowsServer.
+     * Преобразует protocol v3 /info в модель удалённого DROPME-устройства.
      */
     private fun parseServerInfo(host: String, body: String): WindowsServer? {
         return runCatching {
@@ -146,20 +149,31 @@ class WindowsServerScanner {
             if (json.optString("app") !in WindowsServerApi.acceptedAppIds) {
                 return null
             }
-            if (json.optString("role") != "windows-server") {
+            if (json.optString("role") != "device") {
                 return null
             }
             val protocolVersion = json.optInt("protocolVersion", -1)
-            if (protocolVersion != 2) {
+            if (protocolVersion != PROTOCOL_VERSION) {
                 return null
             }
 
+            val deviceId = json.optString("deviceId").trim()
+            if (!deviceId.matches(DEVICE_ID_PATTERN)) {
+                return null
+            }
+
+            val filePort = json.optInt("filePort", 0).takeIf { it > 0 }
             WindowsServer(
                 host = host,
                 tcpPort = json.optInt("tcpPort", DEFAULT_HTTP_PORT),
-                udpPort = json.optInt("udpPort").takeIf { json.has("udpPort") },
+                udpPort = json.optInt("udpPort", 0).takeIf { it > 0 },
                 deviceName = json.optString("deviceName").ifBlank { host },
                 protocolVersion = protocolVersion,
+                deviceId = deviceId,
+                deviceType = json.optString("deviceType").ifBlank { "unknown" },
+                filePort = filePort,
+                fileAccessAvailable = json.optBoolean("fileAccessAvailable", filePort != null),
+                shareAvailable = json.optBoolean("shareAvailable", false),
             )
         }.getOrNull()
     }
@@ -169,7 +183,7 @@ class WindowsServerScanner {
      */
     private fun buildCandidateHosts(address: Inet4Address, prefixLength: Int): List<String> {
         if (prefixLength !in 1..30) {
-            throw AppError.UnknownError("Не удалось определить подсеть Wi‑Fi для поиска серверов").asAppException()
+            throw AppError.UnknownError("Не удалось определить подсеть Wi-Fi для поиска устройств").asAppException()
         }
 
         val ipValue = address.toUnsignedLong()
@@ -187,6 +201,15 @@ class WindowsServerScanner {
             current++
         }
         return result
+    }
+
+    private fun sortedDevices(devices: Collection<WindowsServer>): List<WindowsServer> {
+        return devices.sortedWith(
+            compareBy(
+                { it.deviceName.lowercase() },
+                { it.deviceId },
+            ),
+        )
     }
 
     /**
@@ -215,12 +238,12 @@ class WindowsServerScanner {
     private companion object {
         const val LOG_TAG = "DROPME"
         const val DEFAULT_HTTP_PORT = 49231
+        const val PROTOCOL_VERSION = 3
         const val CONNECT_TIMEOUT_MS = 300L
         const val READ_TIMEOUT_MS = 500L
         const val MAX_PARALLEL_REQUESTS = 24
         const val MAX_SCAN_HOSTS = 4096
         const val IPV4_MASK = 0xFFFFFFFFL
+        val DEVICE_ID_PATTERN = Regex("^[0-9a-f]{32}$")
     }
 }
-
-

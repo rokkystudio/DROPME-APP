@@ -3,12 +3,14 @@ package com.rokkystudio.dropme.network
 import android.util.Log
 import com.rokkystudio.dropme.AppError
 import com.rokkystudio.dropme.asAppException
+import com.rokkystudio.dropme.device.DeviceIdentityStore
 import com.rokkystudio.dropme.storage.SharedFileReader
 import com.rokkystudio.dropme.toAppError
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -16,11 +18,13 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
- * Загружает файлы в Windows DROPME Server через upload endpoint.
+ * Загружает файлы на выбранное DROPME-устройство через короткую разрешённую Share-сессию.
  */
 class WindowsUploadClient(
     private val sharedFileReader: SharedFileReader,
 ) {
+    private val identityStore = DeviceIdentityStore(sharedFileReader.appContext)
+
     enum class UploadStatus {
         SUCCESS,
         FAILED,
@@ -45,7 +49,7 @@ class WindowsUploadClient(
     }
 
     /**
-     * Отправляет набор файлов на выбранный Windows-сервер.
+     * Отправляет набор файлов на выбранное DROPME-устройство.
      */
     fun uploadFiles(
         wifiInfo: WifiNetworkProvider.WifiNetworkInfo,
@@ -67,6 +71,7 @@ class WindowsUploadClient(
         var completedBytesUploaded = 0L
 
         try {
+            authorizeShare(client, server, files.firstOrNull()?.displayName)
             for ((index, file) in files.withIndex()) {
                 if (shouldCancel?.invoke() == true) {
                     results += files.subList(index, files.size).map { pendingFile ->
@@ -122,7 +127,7 @@ class WindowsUploadClient(
     }
 
     /**
-     * Отправляет один файл на upload endpoint Windows-сервера.
+     * Отправляет один файл на upload endpoint выбранного DROPME-устройства.
      */
     private fun uploadSingleFile(
         client: OkHttpClient,
@@ -144,6 +149,8 @@ class WindowsUploadClient(
                 val request = Request.Builder()
                     .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, "/upload?name=$encodedName"))
                     .header("X-DROPME-SHA256", expectedSha256)
+                    .header(HEADER_DEVICE_ID, identityStore.getIdentity().id)
+                    .header(HEADER_DEVICE_NAME, identityStore.getIdentity().name)
                     .put(requestBody)
                     .build()
                 client.newCall(request).execute().use { response ->
@@ -192,6 +199,53 @@ class WindowsUploadClient(
         }
     }
 
+    /**
+     * Открывает короткую Share-сессию и получает разрешение принимающего устройства до передачи тела файла.
+     */
+    private fun authorizeShare(
+        client: OkHttpClient,
+        server: WindowsServer,
+        itemName: String?,
+    ) {
+        val identity = identityStore.getIdentity()
+        val encodedName = itemName
+            ?.let { URLEncoder.encode(it, StandardCharsets.UTF_8.name()) }
+            .orEmpty()
+
+        for (basePath in WindowsServerApi.basePaths) {
+            val suffix = buildString {
+                append("/authorize?purpose=share")
+                if (encodedName.isNotEmpty()) {
+                    append("&name=")
+                    append(encodedName)
+                }
+            }
+            val request = Request.Builder()
+                .url(WindowsServerApi.buildUrl(server.host, server.tcpPort, basePath, suffix))
+                .header(HEADER_DEVICE_ID, identity.id)
+                .header(HEADER_DEVICE_NAME, identity.name)
+                .post(ByteArray(0).toRequestBody(null))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.code == 404) {
+                    return@use
+                }
+                if (!response.isSuccessful) {
+                    throw AppError.UploadFailed(
+                        itemName.orEmpty(),
+                        "Принимающее устройство не разрешило передачу: HTTP " + response.code,
+                    ).asAppException()
+                }
+                return
+            }
+        }
+
+        throw AppError.UploadFailed(
+            itemName.orEmpty(),
+            "Принимающее устройство не поддерживает Share-сессию",
+        ).asAppException()
+    }
     private fun computeFileSha256(file: SharedFileReader.SharedFile): String {
         val digest = MessageDigest.getInstance("SHA-256")
         sharedFileReader.openInputStream(file).use { inputStream ->
@@ -262,6 +316,8 @@ class WindowsUploadClient(
         const val READ_TIMEOUT_SECONDS = 60L
         const val WRITE_TIMEOUT_SECONDS = 60L
         const val UPLOAD_BUFFER_SIZE_BYTES = 64 * 1024
+        const val HEADER_DEVICE_ID = "X-DROPME-Device-ID"
+        const val HEADER_DEVICE_NAME = "X-DROPME-Device-Name"
         val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }

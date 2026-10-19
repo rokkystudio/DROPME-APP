@@ -1,10 +1,14 @@
 package com.rokkystudio.dropme.network
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.system.Os
 import android.util.Log
+import com.rokkystudio.dropme.device.DeviceSessionRegistry
 import androidx.documentfile.provider.DocumentFile
 import com.rokkystudio.dropme.AppError
 import com.rokkystudio.dropme.asAppException
@@ -12,6 +16,7 @@ import com.rokkystudio.dropme.storage.PublishedStorageRoot
 import com.rokkystudio.dropme.storage.StorageBackendType
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.EOFException
 import java.io.File
@@ -58,6 +63,7 @@ class AndroidWebDavServer(
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
     private var clientExecutor: ExecutorService? = null
+    @Volatile
     private var publishedRoots: List<PublishedRoot> = emptyList()
 
     fun start(
@@ -103,6 +109,13 @@ class AndroidWebDavServer(
             basePath = "/",
             rootDisplayNames = rootNames,
         )
+    }
+
+    /**
+     * Обновляет опубликованные корни без остановки файлового сервера.
+     */
+    fun updateRoots(roots: List<PublishedStorageRoot>) {
+        publishedRoots = resolvePublishedRoots(roots)
     }
 
     fun stop() {
@@ -188,6 +201,17 @@ class AndroidWebDavServer(
                 return
             } ?: run {
                 writeSimpleResponse(output, 400, "Bad Request", "text/plain; charset=utf-8", "Bad Request".toByteArray())
+                return
+            }
+            val remoteIp = client.inetAddress?.hostAddress.orEmpty()
+            if (!DeviceSessionRegistry.isAuthorized(remoteIp, "files")) {
+                writeSimpleResponse(
+                    output,
+                    403,
+                    "Forbidden",
+                    "text/plain; charset=utf-8",
+                    "Device is not authorized".toByteArray(),
+                )
                 return
             }
             Log.d(
@@ -412,6 +436,120 @@ class AndroidWebDavServer(
             ),
             body,
         )
+    }
+
+    /**
+     * Возвращает уменьшенное preview изображения или кадр видео без передачи исходного файла.
+     */
+    private fun handleApiPreview(output: BufferedOutputStream, request: WebDavRequest) {
+        val query = parseQueryParams(request.query)
+        val targetPath = query["path"].orEmpty()
+        val requestedSize = query["size"]?.toIntOrNull()?.coerceIn(64, 512) ?: 256
+        val node = resolvePath(targetPath)
+        if (!node.exists || node.isDirectory) {
+            writeSimpleResponse(output, 404, "Not Found", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
+
+        val preview = createPreview(node, requestedSize)
+        if (preview == null) {
+            writeSimpleResponse(output, 415, "Unsupported Media Type", "text/plain; charset=utf-8", ByteArray(0))
+            return
+        }
+
+        writeResponse(
+            output,
+            200,
+            "OK",
+            linkedMapOf(
+                "Content-Type" to "image/jpeg",
+                "Content-Length" to preview.size.toString(),
+                "X-DROPME-Source-Modified" to node.lastModified().coerceAtLeast(0L).toString(),
+            ),
+            preview,
+        )
+    }
+
+    private fun createPreview(node: ResolvedNode, maxSize: Int): ByteArray? {
+        val extension = node.displayName.substringAfterLast('.', "").lowercase(Locale.US)
+        val bitmap = when {
+            extension in IMAGE_PREVIEW_EXTENSIONS -> decodeImagePreview(node, maxSize)
+            extension in VIDEO_PREVIEW_EXTENSIONS -> decodeVideoPreview(node, maxSize)
+            else -> null
+        } ?: return null
+
+        return try {
+            ByteArrayOutputStream().use { output ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 82, output)) {
+                    return null
+                }
+                output.toByteArray()
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun decodeImagePreview(node: ResolvedNode, maxSize: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        openInputStream(node).use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            return null
+        }
+
+        var sampleSize = 1
+        while (bounds.outWidth / sampleSize > maxSize * 2 ||
+            bounds.outHeight / sampleSize > maxSize * 2
+        ) {
+            sampleSize *= 2
+        }
+
+        val decoded = openInputStream(node).use { input ->
+            BitmapFactory.decodeStream(
+                input,
+                null,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                },
+            )
+        } ?: return null
+        return scalePreviewBitmap(decoded, maxSize)
+    }
+
+    private fun decodeVideoPreview(node: ResolvedNode, maxSize: Int): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            when {
+                node.directFile != null -> retriever.setDataSource(node.directFile.absolutePath)
+                node.safDocument != null -> retriever.setDataSource(context, node.safDocument.uri)
+                else -> return null
+            }
+            val frame = retriever.getFrameAtTime(
+                1_000_000L,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+            ) ?: return null
+            scalePreviewBitmap(frame, maxSize)
+        } catch (_: Throwable) {
+            null
+        } finally {
+            retriever.release()
+        }
+    }
+
+    private fun scalePreviewBitmap(bitmap: Bitmap, maxSize: Int): Bitmap {
+        val largest = maxOf(bitmap.width, bitmap.height)
+        if (largest <= maxSize) {
+            return bitmap
+        }
+        val scale = maxSize.toFloat() / largest.toFloat()
+        val width = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val height = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
+        if (scaled !== bitmap) {
+            bitmap.recycle()
+        }
+        return scaled
     }
 
     private fun handleApiList(output: BufferedOutputStream, request: WebDavRequest) {
@@ -1974,6 +2112,7 @@ class AndroidWebDavServer(
         const val API_META_PATH = "/.dropmefs/meta"
         const val API_LIST_PATH = "/.dropmefs/list"
         const val API_DIGEST_PATH = "/.dropmefs/digest"
+        const val API_PREVIEW_PATH = "/.dropmefs/preview"
         const val HEADER_DROP_ME_SHA256 = "x-dropme-sha256"
         const val HEADER_DROP_ME_VERIFY = "x-dropme-verify"
         const val HEADER_DROP_ME_LENGTH_RESPONSE = "X-DROPME-Length"
@@ -1982,6 +2121,8 @@ class AndroidWebDavServer(
         val SAF_TRANSACTION_PATTERN = Regex("^DROPME-([0-9a-fA-F-]{36})\\.txn$")
         val SAF_STAGING_PATTERN = Regex("^DROPME-[0-9a-fA-F-]{36}\\.tmp$")
         val DIRECT_STAGING_PATTERN = Regex("^\\.dropme-[0-9a-fA-F-]{36}\\.tmp$")
+        val IMAGE_PREVIEW_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif")
+        val VIDEO_PREVIEW_EXTENSIONS = setOf("mp4", "m4v", "mov", "mkv", "webm", "3gp", "avi")
     }
 }
 

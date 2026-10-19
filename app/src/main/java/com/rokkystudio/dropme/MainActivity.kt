@@ -1,67 +1,72 @@
 package com.rokkystudio.dropme
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
+import badfox.logic.neoui.NeoButtonView
+import badfox.logic.neoui.NeoIconButtonView
+import badfox.logic.neoui.NeoTopBarView
+import badfox.logic.neoui.NeoThemeMode
+import badfox.logic.neoui.NeoUiSettings
+import com.rokkystudio.dropme.device.DeviceIdentityStore
+import com.rokkystudio.dropme.device.DeviceTrustStore
 import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WifiNetworkProvider
-import com.rokkystudio.dropme.service.AndroidConnectionService
-import com.rokkystudio.dropme.service.ConnectionServicePhase
-import com.rokkystudio.dropme.service.ConnectionServiceSnapshot
-import com.rokkystudio.dropme.service.ConnectionServiceStateStore
+import com.rokkystudio.dropme.service.DropMeDeviceService
 import com.rokkystudio.dropme.storage.StorageAccessState
 import com.rokkystudio.dropme.storage.StorageRootEntry
 import com.rokkystudio.dropme.storage.StorageRootsRepository
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
 import com.rokkystudio.dropme.ui.StorageRootsScreen
-import badfox.logic.neoui.NeoTopBarView
+import java.text.DateFormat
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Показывает доступные хранилища, непрерывно ищет Windows-серверы, пока экран открыт,
- * и управляет активным Android -> Windows подключением.
+ * Управляет identity и сетевой доступностью текущего устройства и показывает другие DROPME-устройства.
  */
 class MainActivity : AppCompatActivity() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val scanHandler = Handler(Looper.getMainLooper())
 
-    private lateinit var uiSettings: UiSettings
-    private lateinit var neoTopBar: NeoTopBarView
-    private lateinit var statusText: TextView
-    private lateinit var detailText: TextView
-    private lateinit var progressBar: ProgressBar
-    private lateinit var storageRootsContainer: LinearLayout
-    private lateinit var serverListContainer: LinearLayout
-    private lateinit var noServersText: TextView
-    private lateinit var disconnectButton: android.widget.Button
-
+    private lateinit var neoUiSettings: NeoUiSettings
+    private lateinit var identityStore: DeviceIdentityStore
     private lateinit var wifiNetworkProvider: WifiNetworkProvider
-    private lateinit var wifiDropScanner: WindowsServerScanner
+    private lateinit var deviceScanner: WindowsServerScanner
     private lateinit var storageRootsRepository: StorageRootsRepository
-    private lateinit var connectionStateStore: ConnectionServiceStateStore
-    private lateinit var serverPickerScreen: ShareServerPickerScreen
+    private lateinit var deviceTrustStore: DeviceTrustStore
+    private lateinit var devicePickerScreen: ShareServerPickerScreen
     private lateinit var storageRootsScreen: StorageRootsScreen
 
-    private var lastWifiInfo: WifiNetworkProvider.WifiNetworkInfo? = null
+    private lateinit var neoTopBar: NeoTopBarView
+    private lateinit var deviceNameEdit: EditText
+    private lateinit var deviceIpText: TextView
+    private lateinit var deviceIdText: TextView
+    private lateinit var deviceServiceCheckBox: CheckBox
+    private lateinit var saveDeviceNameButton: NeoButtonView
+    private lateinit var addStorageRootButton: NeoIconButtonView
+    private lateinit var storageRootsContainer: LinearLayout
+    private lateinit var progressBar: ProgressBar
+    private lateinit var serverListContainer: LinearLayout
+    private lateinit var noServersText: TextView
+    private lateinit var allowedDevicesContainer: LinearLayout
+    private lateinit var blockedDevicesContainer: LinearLayout
+
+    private var discoveredDevices: List<WindowsServer> = emptyList()
     private var lastStorageRoots: List<StorageRootEntry> = emptyList()
-    private var discoveredServers: List<WindowsServer> = emptyList()
-    private var connectionReceiverRegistered = false
 
     @Volatile
     private var activityStarted = false
@@ -73,55 +78,60 @@ class MainActivity : AppCompatActivity() {
         startNetworkScan()
     }
 
-    private val connectionStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            renderConnectionState(connectionStateStore.read())
-        }
-    }
-
     private val manageAllFilesAccessLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             refreshStorageRootsState()
+            DropMeDeviceService.refreshStorageRoots(this)
             if (!storageRootsRepository.hasAllFilesAccess()) {
                 Toast.makeText(this, R.string.main_storage_access_denied, Toast.LENGTH_SHORT).show()
             }
+        }
+
+    private val addStorageRootLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) {
+                return@registerForActivityResult
+            }
+            runCatching {
+                storageRootsRepository.addCustomRoot(uri)
+            }.onFailure {
+                Toast.makeText(this, R.string.storage_add_failed, Toast.LENGTH_SHORT).show()
+                return@registerForActivityResult
+            }
+            refreshStorageRootsState()
+            DropMeDeviceService.refreshStorageRoots(this)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        uiSettings = UiSettings(this)
         bindViews()
         bindDependencies()
         bindActions()
-        renderThemeToggle()
-        renderLanguageFlag()
+        renderTopBar()
+        renderLocalIdentity()
         refreshStorageRootsState()
-        renderServerList()
+        renderDeviceList()
     }
 
     override fun onStart() {
         super.onStart()
         activityStarted = true
-        registerConnectionStateReceiver()
+        renderLocalIdentity()
         refreshStorageRootsState()
-        renderConnectionState(connectionStateStore.read())
         startScanLoop()
     }
 
     override fun onResume() {
         super.onResume()
+        renderLocalIdentity()
         refreshStorageRootsState()
     }
 
     override fun onStop() {
         activityStarted = false
         scanHandler.removeCallbacks(nextScanRunnable)
-        if (connectionReceiverRegistered) {
-            unregisterReceiver(connectionStateReceiver)
-            connectionReceiverRegistered = false
-        }
         super.onStop()
     }
 
@@ -133,60 +143,142 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindViews() {
         neoTopBar = findViewById(R.id.neoTopBar)
-        statusText = findViewById(R.id.mainStatusText)
-        detailText = findViewById(R.id.mainDetailText)
-        progressBar = findViewById(R.id.mainProgressBar)
+        deviceNameEdit = findViewById(R.id.mainDeviceNameEdit)
+        deviceIpText = findViewById(R.id.mainDeviceIpText)
+        deviceIdText = findViewById(R.id.mainDeviceIdText)
+        deviceServiceCheckBox = findViewById(R.id.mainDeviceServiceCheckBox)
+        saveDeviceNameButton = findViewById(R.id.mainSaveDeviceNameButton)
+        addStorageRootButton = findViewById(R.id.mainAddStorageRootButton)
         storageRootsContainer = findViewById(R.id.mainStorageRootsContainer)
+        progressBar = findViewById(R.id.mainProgressBar)
         serverListContainer = findViewById(R.id.mainServerListContainer)
         noServersText = findViewById(R.id.mainNoServersText)
-        disconnectButton = findViewById(R.id.mainDisconnectButton)
+        allowedDevicesContainer = findViewById(R.id.mainAllowedDevicesContainer)
+        blockedDevicesContainer = findViewById(R.id.mainBlockedDevicesContainer)
     }
 
     private fun bindDependencies() {
+        neoUiSettings = NeoUiSettings(
+            context = this,
+            preferencesName = NEO_UI_PREFERENCES_NAME,
+            defaultTheme = NeoThemeMode.DARK,
+            defaultLanguageTag = null,
+        )
+        identityStore = DeviceIdentityStore(applicationContext)
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
-        wifiDropScanner = WindowsServerScanner()
+        deviceScanner = WindowsServerScanner()
         storageRootsRepository = StorageRootsRepository(applicationContext)
-        connectionStateStore = ConnectionServiceStateStore(applicationContext)
-        serverPickerScreen = ShareServerPickerScreen(
+        deviceTrustStore = DeviceTrustStore(applicationContext)
+        devicePickerScreen = ShareServerPickerScreen(
             context = this,
             container = serverListContainer,
-            onServerSelected = ::connectToServer,
+            onServerSelected = ::openDevice,
         )
         storageRootsScreen = StorageRootsScreen(
             context = this,
             container = storageRootsContainer,
+            onEnabledChanged = ::handleStorageRootEnabledChanged,
             onRootSelected = ::handleStorageRootSelected,
+            onRemoveRoot = ::handleStorageRootRemove,
         )
     }
 
     private fun bindActions() {
-        disconnectButton.setOnClickListener {
-            AndroidConnectionService.stop(this)
-            renderConnectionState(
-                ConnectionServiceSnapshot(
-                    phase = ConnectionServicePhase.IDLE,
-                    detailMessage = getString(R.string.main_status_disconnected_detail),
-                ),
-            )
+        deviceNameEdit.addTextChangedListener(
+            object : TextWatcher {
+                override fun beforeTextChanged(
+                    text: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int,
+                ) = Unit
+
+                override fun onTextChanged(
+                    text: CharSequence?,
+                    start: Int,
+                    before: Int,
+                    count: Int,
+                ) {
+                    updateSaveDeviceNameVisibility()
+                }
+
+                override fun afterTextChanged(text: Editable?) = Unit
+            },
+        )
+
+        saveDeviceNameButton.setOnClickListener {
+            val name = deviceNameEdit.text?.toString().orEmpty().trim()
+            if (name.isEmpty()) {
+                Toast.makeText(this, R.string.main_device_name_required, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            identityStore.setDeviceName(name)
+            restartDeviceServiceIfEnabled()
+            renderLocalIdentity()
+            updateSaveDeviceNameVisibility()
+            Toast.makeText(this, R.string.main_device_name_saved, Toast.LENGTH_SHORT).show()
+        }
+
+        addStorageRootButton.setOnClickListener {
+            addStorageRootLauncher.launch(null)
+        }
+
+        deviceServiceCheckBox.setOnClickListener {
+            if (deviceServiceCheckBox.isChecked) {
+                identityStore.setDeviceServiceEnabled(true)
+                DropMeDeviceService.start(this)
+            } else {
+                identityStore.setDeviceServiceEnabled(false)
+                DropMeDeviceService.stop(this)
+            }
+            renderLocalIdentity()
         }
     }
 
-    private fun renderThemeToggle() {
+    private fun renderTopBar() {
         neoTopBar.setAppInfo(
             title = getString(R.string.app_name),
-            subtitle = getString(R.string.android_client),
+            subtitle = getString(R.string.main_header_subtitle),
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )
-        uiSettings.bindTopBarUi(neoTopBar)
+        neoUiSettings.bindTopBar(neoTopBar)
     }
-    private fun toggleTheme() = Unit
 
-    private fun renderLanguageFlag() = Unit
+    private fun renderLocalIdentity() {
+        val identity = identityStore.getIdentity()
+        if (!deviceNameEdit.hasFocus()) {
+            deviceNameEdit.setText(identity.name)
+        }
+        deviceIdText.text = getString(R.string.main_device_id, identity.id)
+        deviceServiceCheckBox.isChecked = identityStore.isDeviceServiceEnabled()
+        updateSaveDeviceNameVisibility()
 
+        executor.execute {
+            val ip = runCatching {
+                wifiNetworkProvider.getWifiNetworkInfo().ipv4Address.hostAddress.orEmpty()
+            }.getOrDefault("")
+            runOnUiThread {
+                deviceIpText.text = getString(
+                    R.string.main_device_ip,
+                    ip.ifBlank { getString(R.string.main_device_ip_unavailable) },
+                )
+            }
+        }
+    }
+
+    /**
+     * Показывает сохранение имени только если введённое значение отличается от сохранённого имени.
+     */
+    private fun updateSaveDeviceNameVisibility() {
+        val editedName = deviceNameEdit.text?.toString().orEmpty().trim()
+        val savedName = identityStore.getDeviceName()
+        saveDeviceNameButton.visibility =
+            if (editedName != savedName) View.VISIBLE else View.GONE
+    }
     private fun startScanLoop() {
         scanHandler.removeCallbacks(nextScanRunnable)
-        renderScanningIndicator()
         startNetworkScan()
     }
 
@@ -197,39 +289,42 @@ class MainActivity : AppCompatActivity() {
 
         scanInProgress = true
         val startedAt = SystemClock.elapsedRealtime()
-        renderScanningIndicator()
+        progressBar.visibility = View.VISIBLE
 
         executor.execute {
             try {
                 val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
-                lastWifiInfo = wifiInfo
-                wifiDropScanner.scan(
+                runOnUiThread {
+                    deviceIpText.text = getString(
+                        R.string.main_device_ip,
+                        wifiInfo.ipv4Address.hostAddress.orEmpty(),
+                    )
+                }
+
+                deviceScanner.scan(
                     wifiInfo = wifiInfo,
-                    onServerFound = { servers ->
+                    onServerFound = { devices ->
                         runOnUiThread {
                             if (activityStarted) {
-                                mergeDiscoveredServers(servers)
+                                mergeDiscoveredDevices(devices)
                             }
                         }
                     },
                     shouldContinue = {
                         activityStarted && !Thread.currentThread().isInterrupted
                     },
-                ).also { servers ->
+                ).also { devices ->
                     runOnUiThread {
                         if (activityStarted) {
-                            replaceDiscoveredServers(servers)
-                            renderScanningIndicator()
+                            replaceDiscoveredDevices(devices)
                         }
                     }
                 }
-            } catch (throwable: Throwable) {
-                val error = throwable.toAppError(
-                    AppError.UnknownError(getString(R.string.main_status_error_title)),
-                )
+            } catch (_: Throwable) {
                 runOnUiThread {
                     if (activityStarted) {
-                        renderScanError(error)
+                        discoveredDevices = emptyList()
+                        renderDeviceList()
                     }
                 }
             } finally {
@@ -237,6 +332,7 @@ class MainActivity : AppCompatActivity() {
                 val elapsed = SystemClock.elapsedRealtime() - startedAt
                 val delay = (SCAN_INTERVAL_MS - elapsed).coerceAtLeast(0L)
                 runOnUiThread {
+                    progressBar.visibility = View.GONE
                     if (activityStarted) {
                         scanHandler.removeCallbacks(nextScanRunnable)
                         scanHandler.postDelayed(nextScanRunnable, delay)
@@ -246,134 +342,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun mergeDiscoveredServers(servers: List<WindowsServer>) {
-        if (servers.isEmpty()) {
-            renderServerList()
-            return
-        }
-
+    private fun mergeDiscoveredDevices(devices: List<WindowsServer>) {
         val merged = LinkedHashMap<String, WindowsServer>()
-        discoveredServers.forEach { server ->
-            merged[serverKey(server)] = server
+        discoveredDevices.forEach { device ->
+            merged[device.deviceId] = device
         }
-        servers.forEach { server ->
-            merged[serverKey(server)] = server
+        devices.forEach { device ->
+            merged[device.deviceId] = device
         }
-        discoveredServers = merged.values.sortedWith(
-            compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
-        )
-        renderServerList()
+        discoveredDevices = sortDevices(merged.values)
+        renderDeviceList()
     }
 
-    /**
-     * Заменяет список серверов результатом завершённого scan, удаляя устаревшие записи.
-     */
-    private fun replaceDiscoveredServers(servers: List<WindowsServer>) {
-        discoveredServers = servers.sortedWith(
-            compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
-        )
-        renderServerList()
+    private fun replaceDiscoveredDevices(devices: List<WindowsServer>) {
+        discoveredDevices = sortDevices(devices)
+        renderDeviceList()
     }
 
-    private fun serverKey(server: WindowsServer): String =
-        server.host + ":" + server.tcpPort
-
-    private fun renderServerList() {
-        serverPickerScreen.show(discoveredServers)
-        val hasServers = discoveredServers.isNotEmpty()
-        serverListContainer.visibility = if (hasServers) View.VISIBLE else View.GONE
-        noServersText.visibility = if (hasServers) View.GONE else View.VISIBLE
+    private fun sortDevices(devices: Collection<WindowsServer>): List<WindowsServer> {
+        return devices.sortedWith(compareBy({ it.deviceName.lowercase() }, { it.deviceId }))
     }
 
-    private fun renderScanningIndicator() {
-        progressBar.visibility = View.VISIBLE
+    private fun renderDeviceList() {
+        devicePickerScreen.show(discoveredDevices)
+        val hasDevices = discoveredDevices.isNotEmpty()
+        serverListContainer.visibility = if (hasDevices) View.VISIBLE else View.GONE
+        noServersText.visibility = if (hasDevices) View.GONE else View.VISIBLE
     }
 
-    private fun renderScanError(error: AppError) {
-        progressBar.visibility = View.VISIBLE
-        if (connectionStateStore.read().phase == ConnectionServicePhase.IDLE) {
-            detailText.text = error.toUserMessage(this)
-        }
-    }
-
-    private fun connectToServer(server: WindowsServer) {
-        if (lastWifiInfo == null) {
-            Toast.makeText(
-                this,
-                AppError.NoWifiNetwork.toUserMessage(this),
-                Toast.LENGTH_SHORT,
-            ).show()
+    private fun openDevice(device: WindowsServer) {
+        if (!device.fileAccessAvailable || device.filePort == null) {
+            Toast.makeText(this, R.string.main_remote_files_unavailable, Toast.LENGTH_SHORT).show()
             return
         }
-
-        val publishedRoots = storageRootsRepository.listPublishedRoots()
-        if (publishedRoots.isEmpty()) {
-            refreshStorageRootsState()
-            Toast.makeText(
-                this,
-                R.string.main_error_no_storage_roots_ready,
-                Toast.LENGTH_SHORT,
-            ).show()
-            return
-        }
-
-        AndroidConnectionService.start(this, server)
-        renderConnectionState(
-            ConnectionServiceSnapshot(
-                phase = ConnectionServicePhase.CONNECTING,
-                serverName = server.deviceName,
-                serverHost = server.host,
-                serverPort = server.tcpPort,
-                detailMessage = getString(
-                    R.string.main_status_connecting_detail,
-                    server.host,
-                    server.tcpPort,
-                ),
-            ),
-        )
-    }
-
-    private fun renderConnectionState(snapshot: ConnectionServiceSnapshot) {
-        when (snapshot.phase) {
-            ConnectionServicePhase.IDLE -> {
-                statusText.text = getString(R.string.main_status_select_server)
-                detailText.text = snapshot.detailMessage.orEmpty()
-                disconnectButton.visibility = View.GONE
-            }
-
-            ConnectionServicePhase.CONNECTING -> {
-                statusText.text = getString(
-                    R.string.main_status_connecting,
-                    snapshot.serverName.orEmpty(),
-                )
-                detailText.text = snapshot.detailMessage.orEmpty()
-                disconnectButton.visibility = View.VISIBLE
-            }
-
-            ConnectionServicePhase.CONNECTED -> {
-                statusText.text = getString(
-                    R.string.main_status_connected,
-                    snapshot.serverName.orEmpty(),
-                )
-                detailText.text = snapshot.detailMessage.orEmpty()
-                disconnectButton.visibility = View.VISIBLE
-            }
-
-            ConnectionServicePhase.ERROR -> {
-                statusText.text = getString(R.string.main_status_error_title)
-                detailText.text = snapshot.errorMessage
-                    ?: getString(R.string.main_status_error_title)
-                disconnectButton.visibility = View.GONE
-            }
-        }
-
-        renderScanningIndicator()
-        renderServerList()
+        startActivity(RemoteFilesActivity.createIntent(this, device))
     }
 
     private fun refreshStorageRootsState() {
         lastStorageRoots = storageRootsRepository.listRoots()
         storageRootsScreen.show(lastStorageRoots)
+    }
+
+    private fun handleStorageRootEnabledChanged(root: StorageRootEntry, enabled: Boolean) {
+        storageRootsRepository.setEnabled(root.id, enabled)
+        if (enabled && root.accessState != StorageAccessState.READY) {
+            handleStorageRootSelected(root)
+        }
+        refreshStorageRootsState()
+        DropMeDeviceService.refreshStorageRoots(this)
+    }
+
+    private fun handleStorageRootRemove(root: StorageRootEntry) {
+        if (!root.canRemove) {
+            return
+        }
+        storageRootsRepository.removeCustomRoot(root.id)
+        refreshStorageRootsState()
+        DropMeDeviceService.refreshStorageRoots(this)
     }
 
     private fun handleStorageRootSelected(root: StorageRootEntry) {
@@ -396,21 +421,116 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun registerConnectionStateReceiver() {
-        if (connectionReceiverRegistered) {
+    /**
+     * Показывает постоянные решения отдельно для разрешённых и заблокированных устройств.
+     */
+    private fun renderTrustLists() {
+        renderTrustSection(
+            container = allowedDevicesContainer,
+            devices = deviceTrustStore.list(DeviceTrustStore.Decision.ALLOWED),
+            replacement = DeviceTrustStore.Decision.BLOCKED,
+        )
+        renderTrustSection(
+            container = blockedDevicesContainer,
+            devices = deviceTrustStore.list(DeviceTrustStore.Decision.BLOCKED),
+            replacement = DeviceTrustStore.Decision.ALLOWED,
+        )
+    }
+
+    private fun renderTrustSection(
+        container: LinearLayout,
+        devices: List<DeviceTrustStore.KnownDevice>,
+        replacement: DeviceTrustStore.Decision,
+    ) {
+        container.removeAllViews()
+        if (devices.isEmpty()) {
+            container.addView(TextView(this).apply {
+                text = getString(R.string.main_trust_list_empty)
+                setTextColor(getColor(R.color.text_secondary))
+                textSize = 12f
+                setPadding(0, dp(8), 0, dp(8))
+            })
             return
         }
-        val filter = IntentFilter(AndroidConnectionService.ACTION_STATE_CHANGED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(connectionStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(connectionStateReceiver, filter)
+
+        devices.forEach { device ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+                background = getDrawable(R.drawable.bg_button)
+            }
+            val details = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            details.addView(TextView(this).apply {
+                text = device.deviceName
+                setTextColor(getColor(R.color.text_primary))
+                textSize = 13f
+            })
+            details.addView(TextView(this).apply {
+                text = getString(
+                    R.string.main_known_device_info,
+                    device.lastIp.ifBlank { "—" },
+                    device.deviceId,
+                )
+                setTextColor(getColor(R.color.text_secondary))
+                textSize = 10f
+            })
+            details.addView(TextView(this).apply {
+                text = DateFormat.getDateTimeInstance(
+                    DateFormat.SHORT,
+                    DateFormat.SHORT,
+                ).format(device.lastSeenAt)
+                setTextColor(getColor(R.color.text_secondary))
+                textSize = 10f
+            })
+            row.addView(
+                details,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+            )
+
+            row.addView(NeoButtonView(this).apply {
+                text = getString(
+                    if (replacement == DeviceTrustStore.Decision.ALLOWED) {
+                        R.string.main_trust_allow
+                    } else {
+                        R.string.main_trust_block
+                    },
+                )
+                isAllCaps = false
+                setOnClickListener {
+                    deviceTrustStore.remember(
+                        deviceId = device.deviceId,
+                        deviceName = device.deviceName,
+                        ip = device.lastIp,
+                        decision = replacement,
+                    )
+                    renderTrustLists()
+                }
+            })
+            container.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = dp(6)
+                },
+            )
         }
-        connectionReceiverRegistered = true
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
+    private fun restartDeviceServiceIfEnabled() {
+        if (identityStore.isDeviceServiceEnabled()) {
+            DropMeDeviceService.start(this)
+        }
     }
 
     private companion object {
+        const val NEO_UI_PREFERENCES_NAME = "dropme_ui"
         const val SCAN_INTERVAL_MS = 10_000L
     }
 }

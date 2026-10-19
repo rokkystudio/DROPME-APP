@@ -1,28 +1,35 @@
 package com.rokkystudio.dropme
 
 import android.app.Application
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
+import badfox.logic.neoui.NeoThemeMode
+import badfox.logic.neoui.NeoUiSettings
+import com.rokkystudio.dropme.device.DeviceIdentityStore
+import com.rokkystudio.dropme.network.AppContextHolder
+import com.rokkystudio.dropme.service.DropMeDeviceService
 
 /**
- * Применяет сохранённые настройки интерфейса на уровне процесса до создания Activity.
+ * Применяет общие настройки NeoUI и восстанавливает включённую сетевую доступность устройства.
  */
 class DropMeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        applySavedUiSettings()
+        AppContextHolder.context = applicationContext
+        NeoUiSettings(
+            context = this,
+            preferencesName = NEO_UI_PREFERENCES_NAME,
+            defaultTheme = NeoThemeMode.DARK,
+            defaultLanguageTag = null,
+        ).apply {
+            applyAppCompatNightMode()
+            applyAppCompatLanguage()
+        }
+
+        if (DeviceIdentityStore(this).isDeviceServiceEnabled()) {
+            DropMeDeviceService.start(this)
+        }
     }
 
-    private fun applySavedUiSettings() {
-        val uiSettings = UiSettings(this)
-        AppCompatDelegate.setDefaultNightMode(
-            when (uiSettings.getTheme()) {
-                AppTheme.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-                AppTheme.DARK -> AppCompatDelegate.MODE_NIGHT_YES
-            },
-        )
-        AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(uiSettings.getLanguage()),
-        )
+    private companion object {
+        const val NEO_UI_PREFERENCES_NAME = "dropme_ui"
     }
 }

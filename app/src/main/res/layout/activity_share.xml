@@ -183,7 +183,7 @@
                     android:textSize="11sp"
                     android:visibility="gone" />
 
-                <Button
+                <badfox.logic.neoui.NeoButtonView
                     android:id="@+id/retryButton"
                     android:layout_width="match_parent"
                     android:layout_height="46dp"
@@ -229,7 +229,7 @@
         android:paddingEnd="12dp"
         android:paddingBottom="10dp">
 
-        <Button
+        <badfox.logic.neoui.NeoButtonView
             android:id="@+id/closeButton"
             android:layout_width="match_parent"
             android:layout_height="46dp"
