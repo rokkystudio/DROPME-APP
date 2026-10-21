@@ -34,6 +34,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":icons"))
     implementation(project(":neoui"))
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.appcompat)

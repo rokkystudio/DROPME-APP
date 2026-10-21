@@ -24,8 +24,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "DROPME"
 include(":app")
-include(":geo")
+include(":flags")
+include(":icons")
 include(":neoui")
 
-project(":geo").projectDir = file("../SHARED-APP/geo")
+project(":flags").projectDir = file("../SHARED-APP/flags")
+project(":icons").projectDir = file("../SHARED-APP/icons")
 project(":neoui").projectDir = file("../SHARED-APP/neoui")

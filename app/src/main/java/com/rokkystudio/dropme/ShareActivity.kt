@@ -234,7 +234,7 @@ class ShareActivity : AppCompatActivity() {
     private fun bindNeoTopBar() {
         neoTopBar.setAppInfo(
             title = getString(R.string.app_name),
-            subtitle = getString(R.string.share_header_subtitle),
+            subtitle = getString(R.string.main_header_subtitle),
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )

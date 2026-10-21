@@ -7,7 +7,8 @@ plugins {
 allprojects {
     configurations.configureEach {
         resolutionStrategy.dependencySubstitution {
-            substitute(module("com.rokkystudio.sharedapp:geo")).using(project(":geo"))
+            substitute(module("badfox.logic.sharedapp:flags")).using(project(":flags"))
+            substitute(module("badfox.logic.sharedapp:icons")).using(project(":icons"))
         }
     }
 }

@@ -132,7 +132,16 @@
     <string name="remote_files_folder">Папка</string>
     <string name="remote_files_load_failed">Не удалось загрузить список файлов</string>
     <string name="remote_files_download_failed">Не удалось скачать файл</string>
-    <string name="remote_files_downloaded">Сохранено в %1$s</string>    <string name="approval_title">Входящий запрос DROPME</string>
+    <string name="remote_files_downloaded">Сохранено в %1$s</string>
+    <string name="remote_connection_waiting_title">Подключение</string>
+    <string name="remote_connection_waiting_message">Ожидание подтверждения на устройстве %1$s…</string>
+    <string name="remote_connection_rejected_title">Подключение отклонено</string>
+    <string name="remote_connection_rejected_message">Другое устройство отклонило подключение.</string>
+    <string name="remote_connection_timeout_title">Время ожидания истекло</string>
+    <string name="remote_connection_timeout_message">Другое устройство не подтвердило подключение вовремя.</string>
+    <string name="remote_connection_error_title">Не удалось подключиться</string>
+    <string name="remote_connection_retry">Повторить</string>
+    <string name="remote_connection_close">Закрыть</string>    <string name="approval_title">Входящий запрос DROPME</string>
     <string name="approval_message_share">%1$s хочет отправить файлы.\n\nIP: %2$s\nID: %3$s</string>
     <string name="approval_message_files">%1$s хочет получить доступ к файлам этого устройства.\n\nIP: %2$s\nID: %3$s</string>
     <string name="approval_item_name">Объект: %1$s</string>
@@ -148,4 +157,19 @@
     <string name="main_trust_list_empty">Список пуст</string>
     <string name="main_known_device_info">IP: %1$s • ID: %2$s</string>
     <string name="main_trust_allow">Разрешить</string>
-    <string name="main_trust_block">Заблокировать</string></resources>
+    <string name="main_trust_block">Заблокировать</string>
+    <string name="main_trust_forget">Удалить</string>
+    <string name="main_trust_forget_title">Удалить устройство?</string>
+    <string name="main_trust_forget_message">Забыть %1$s и снова запрашивать разрешение при следующем подключении?</string>    <string name="navigation_device">Устройство</string>
+    <string name="navigation_connection">Подключение</string>
+    <string name="connection_no_other_devices">Другие устройства DROPME не обнаружены</string>
+    <string name="connection_local_device_info">Это устройство • %1$s</string>
+    <string name="connection_remote_device_info">%1$s • ID: %2$s</string>
+    <string name="remote_files_back">Назад</string>
+    <string name="local_files_device_info">Файлы на этом устройстве</string>
+    <string name="local_files_storages">Хранилища</string>
+    <string name="local_files_permission_title">Требуется доступ к файлам</string>
+    <string name="local_files_permission_message">Чтобы просматривать все файлы этого устройства, разрешите DROPME доступ ко всем файлам в настройках Android.</string>
+    <string name="local_files_permission_required">DROPME не может показать локальные файлы, пока Android не предоставит файловый доступ.</string>
+    <string name="local_files_permission_grant">Предоставить доступ</string>
+</resources>

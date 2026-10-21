@@ -20,7 +20,8 @@ androidx-constraintlayout = { group = "androidx.constraintlayout", name = "const
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
-geo = { module = "com.rokkystudio.sharedapp:geo", version.ref = "sharedApp" }
+flags = { module = "badfox.logic.sharedapp:flags", version.ref = "sharedApp" }
+icons = { module = "badfox.logic.sharedapp:icons", version.ref = "sharedApp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

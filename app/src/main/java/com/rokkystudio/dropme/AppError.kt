@@ -34,6 +34,10 @@ sealed class AppError {
         val reason: String? = null,
     ) : AppError()
 
+    data object RemoteConnectionRejected : AppError()
+
+    data object RemoteApprovalTimedOut : AppError()
+
     data class UnknownError(
         val reason: String? = null,
     ) : AppError()
@@ -52,6 +56,8 @@ sealed class AppError {
             StoragePermissionMissing -> context.getString(R.string.share_status_error_title)
             is UnsupportedStorageOperation -> reason ?: context.getString(R.string.share_status_error_title)
             is WindowsRejectedConnection -> reason ?: context.getString(R.string.share_status_error_title)
+            RemoteConnectionRejected -> context.getString(R.string.remote_connection_rejected_message)
+            RemoteApprovalTimedOut -> context.getString(R.string.remote_connection_timeout_message)
             is UnknownError -> reason ?: context.getString(R.string.share_status_error_title)
         }
     }

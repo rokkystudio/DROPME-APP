@@ -132,7 +132,16 @@
     <string name="remote_files_folder">Folder</string>
     <string name="remote_files_load_failed">Could not load remote files</string>
     <string name="remote_files_download_failed">Could not download file</string>
-    <string name="remote_files_downloaded">Saved to %1$s</string>    <string name="approval_title">Incoming DROPME request</string>
+    <string name="remote_files_downloaded">Saved to %1$s</string>
+    <string name="remote_connection_waiting_title">Connecting</string>
+    <string name="remote_connection_waiting_message">Waiting for confirmation on %1$s…</string>
+    <string name="remote_connection_rejected_title">Connection rejected</string>
+    <string name="remote_connection_rejected_message">The other device rejected the connection.</string>
+    <string name="remote_connection_timeout_title">Confirmation timed out</string>
+    <string name="remote_connection_timeout_message">The other device did not confirm the connection in time.</string>
+    <string name="remote_connection_error_title">Connection failed</string>
+    <string name="remote_connection_retry">Retry</string>
+    <string name="remote_connection_close">Close</string>    <string name="approval_title">Incoming DROPME request</string>
     <string name="approval_message_share">%1$s wants to send files.\n\nIP: %2$s\nID: %3$s</string>
     <string name="approval_message_files">%1$s wants to access files on this device.\n\nIP: %2$s\nID: %3$s</string>
     <string name="approval_item_name">Item: %1$s</string>
@@ -148,4 +157,19 @@
     <string name="main_trust_list_empty">List is empty</string>
     <string name="main_known_device_info">IP: %1$s • ID: %2$s</string>
     <string name="main_trust_allow">Allow</string>
-    <string name="main_trust_block">Block</string></resources>
+    <string name="main_trust_block">Block</string>
+    <string name="main_trust_forget">Remove</string>
+    <string name="main_trust_forget_title">Remove device?</string>
+    <string name="main_trust_forget_message">Forget %1$s and ask for permission again next time it connects?</string>    <string name="navigation_device">Device</string>
+    <string name="navigation_connection">Connection</string>
+    <string name="connection_no_other_devices">No other DROPME devices detected</string>
+    <string name="connection_local_device_info">This device • %1$s</string>
+    <string name="connection_remote_device_info">%1$s • ID: %2$s</string>
+    <string name="remote_files_back">Back</string>
+    <string name="local_files_device_info">Files on this device</string>
+    <string name="local_files_storages">Storages</string>
+    <string name="local_files_permission_title">File access required</string>
+    <string name="local_files_permission_message">To browse all files on this device, allow DROPME access to all files in Android settings.</string>
+    <string name="local_files_permission_required">DROPME cannot browse local files until Android grants file access.</string>
+    <string name="local_files_permission_grant">Grant access</string>
+</resources>

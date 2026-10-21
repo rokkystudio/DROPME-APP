@@ -48,17 +48,13 @@
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
-                <badfox.logic.neoui.NeoButtonView
+                <badfox.logic.neoui.NeoIconActionView
                     android:id="@+id/remoteUpButton"
-                    android:layout_width="match_parent"
+                    android:layout_width="44dp"
                     android:layout_height="44dp"
                     android:layout_marginTop="10dp"
-                    android:background="@drawable/bg_button"
-                    android:backgroundTint="@null"
-                    android:stateListAnimator="@null"
-                    android:text="@string/remote_files_up"
-                    android:textAllCaps="false"
-                    android:textColor="@color/action_button_text_color" />
+                    android:contentDescription="@string/remote_files_back"
+                    android:src="@drawable/ms_arrow_back" />
 
                 <ProgressBar
                     android:id="@+id/remoteProgressBar"

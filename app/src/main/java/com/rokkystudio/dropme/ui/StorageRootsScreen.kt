@@ -9,7 +9,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
-import badfox.logic.neoui.NeoIconButtonView
+import badfox.logic.neoui.NeoIconActionView
 import com.rokkystudio.dropme.R
 import com.rokkystudio.dropme.storage.StorageAccessState
 import com.rokkystudio.dropme.storage.StorageRootEntry
@@ -34,7 +34,7 @@ class StorageRootsScreen(
             val iconView = row.findViewById<ImageView>(R.id.storageRootIcon)
             val titleView = row.findViewById<TextView>(R.id.storageRootTitle)
             val stateView = row.findViewById<TextView>(R.id.storageRootState)
-            val removeButton = row.findViewById<NeoIconButtonView>(R.id.storageRootRemove)
+            val removeButton = row.findViewById<NeoIconActionView>(R.id.storageRootRemove)
 
             titleView.text = root.displayName
             enabledView.isChecked = root.isEnabled

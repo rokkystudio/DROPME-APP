@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
@@ -56,12 +57,17 @@ class RemoteFileClient(
                 .post(ByteArray(0).toRequestBody(null))
                 .build()
             client.newCall(request).execute().use { response ->
+                if (response.code == 403) {
+                    throw AppError.RemoteConnectionRejected.asAppException()
+                }
                 if (!response.isSuccessful) {
                     throw AppError.UnknownError(
                         "Удалённое устройство не разрешило доступ: HTTP ${response.code}",
                     ).asAppException()
                 }
             }
+        } catch (throwable: SocketTimeoutException) {
+            throw AppError.RemoteApprovalTimedOut.asAppException(throwable)
         } finally {
             client.dispatcher.executorService.shutdown()
             client.connectionPool.evictAll()
@@ -293,7 +299,7 @@ class RemoteFileClient(
 
     private companion object {
         const val CONNECT_TIMEOUT_SECONDS = 10L
-        const val READ_TIMEOUT_SECONDS = 60L
+        const val READ_TIMEOUT_SECONDS = 70L
         const val DOWNLOAD_DIRECTORY = "DROPME"
         const val PREVIEW_SIZE = 256
         const val MAX_PREVIEW_CACHE_BYTES = 128L * 1024L * 1024L

@@ -190,6 +190,9 @@ class AndroidDeviceServer {
 
         sessionAuthorizations[authorizationKey(requester.id, purpose)] =
             System.currentTimeMillis() + SESSION_AUTHORIZATION_MS
+        if (purpose == PURPOSE_FILES) {
+            DeviceSessionRegistry.grant(remoteIp, purpose)
+        }
         writeJson(
             output,
             200,

@@ -12,8 +12,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import badfox.logic.neoui.NeoButtonView
+import badfox.logic.neoui.NeoIconActionView
 import badfox.logic.neoui.NeoTopBarView
 import badfox.logic.neoui.NeoThemeMode
 import badfox.logic.neoui.NeoUiSettings
@@ -33,7 +34,7 @@ class RemoteFilesActivity : AppCompatActivity() {
     private lateinit var neoTopBar: NeoTopBarView
     private lateinit var deviceInfoText: TextView
     private lateinit var pathText: TextView
-    private lateinit var upButton: NeoButtonView
+    private lateinit var upButton: NeoIconActionView
     private lateinit var progressBar: ProgressBar
     private lateinit var emptyText: TextView
     private lateinit var filesContainer: LinearLayout
@@ -44,6 +45,7 @@ class RemoteFilesActivity : AppCompatActivity() {
 
     private var currentPath: String = "/"
     private var sessionAuthorized = false
+    private var connectionDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,8 +61,8 @@ class RemoteFilesActivity : AppCompatActivity() {
         remoteFileClient = RemoteFileClient(applicationContext)
 
         neoTopBar.setAppInfo(
-            title = device.deviceName,
-            subtitle = getString(R.string.remote_files_title),
+            title = getString(R.string.app_name),
+            subtitle = getString(R.string.main_header_subtitle),
             version = BuildConfig.VERSION_NAME,
             iconResId = R.mipmap.ic_launcher,
         )
@@ -97,6 +99,8 @@ class RemoteFilesActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        connectionDialog?.dismiss()
+        connectionDialog = null
         executor.shutdownNow()
         previewExecutor.shutdownNow()
         super.onDestroy()
@@ -120,6 +124,11 @@ class RemoteFilesActivity : AppCompatActivity() {
         emptyText.visibility = View.GONE
         filesContainer.removeAllViews()
 
+        val requiresAuthorization = !sessionAuthorized
+        if (requiresAuthorization) {
+            showConnectionWaitingDialog()
+        }
+
         executor.execute {
             runCatching {
                 val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
@@ -130,20 +139,79 @@ class RemoteFilesActivity : AppCompatActivity() {
                 remoteFileClient.list(wifiInfo, device, currentPath)
             }.onSuccess { entries ->
                 runOnUiThread {
+                    dismissConnectionDialog()
                     progressBar.visibility = View.GONE
                     renderEntries(entries)
                 }
             }.onFailure { throwable ->
                 runOnUiThread {
+                    dismissConnectionDialog()
                     progressBar.visibility = View.GONE
-                    Toast.makeText(
-                        this,
-                        throwable.message ?: getString(R.string.remote_files_load_failed),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                    if (requiresAuthorization) {
+                        showConnectionErrorDialog(throwable)
+                    } else {
+                        Toast.makeText(
+                            this,
+                            throwable.findAppError()?.toUserMessage(this)
+                                ?: throwable.message
+                                ?: getString(R.string.remote_files_load_failed),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Показывает ожидание пользовательского подтверждения на удалённом DROPME-устройстве.
+     */
+    private fun showConnectionWaitingDialog() {
+        dismissConnectionDialog()
+        connectionDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.remote_connection_waiting_title)
+            .setMessage(getString(R.string.remote_connection_waiting_message, device.deviceName))
+            .setCancelable(false)
+            .create()
+            .also { it.show() }
+    }
+
+    /**
+     * Показывает результат неуспешной авторизации и позволяет повторить подключение или закрыть экран.
+     */
+    private fun showConnectionErrorDialog(throwable: Throwable) {
+        val error = throwable.findAppError()
+        val title = when (error) {
+            AppError.RemoteConnectionRejected -> R.string.remote_connection_rejected_title
+            AppError.RemoteApprovalTimedOut -> R.string.remote_connection_timeout_title
+            else -> R.string.remote_connection_error_title
+        }
+        val message = error?.toUserMessage(this)
+            ?: throwable.message
+            ?: getString(R.string.remote_files_load_failed)
+
+        connectionDialog = AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(R.string.remote_connection_retry) { _, _ ->
+                loadPath(currentPath)
+            }
+            .setNegativeButton(R.string.remote_connection_close) { _, _ ->
+                finish()
+            }
+            .setOnCancelListener {
+                finish()
+            }
+            .create()
+            .also { it.show() }
+    }
+
+    /**
+     * Закрывает текущий диалог состояния подключения.
+     */
+    private fun dismissConnectionDialog() {
+        connectionDialog?.dismiss()
+        connectionDialog = null
     }
 
     private fun renderEntries(entries: List<RemoteFileClient.Entry>) {
