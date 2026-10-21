@@ -58,8 +58,13 @@
     <string name="storage_state_ready_rw">read-write ready</string>
     <string name="storage_state_ready_ro">read-only ready</string>
     <string name="storage_state_needs_all_files">grant all files access</string>
-    <string name="storage_state_needs_tree_grant">grant all files access</string>
+    <string name="storage_state_needs_tree_grant">folder access required</string>
     <string name="storage_state_unavailable">storage is unavailable</string>
+    <string name="storage_permission_required_title">Storage permission required</string>
+    <string name="storage_permission_required_all_files">To enable %1$s, grant DROPME access to all files.</string>
+    <string name="storage_permission_required_tree">To enable %1$s, grant access to this folder again.</string>
+    <string name="storage_permission_unavailable">%1$s is currently unavailable and cannot be enabled.</string>
+    <string name="storage_permission_grant">Grant access</string>
     <string name="share_activity_title">DROPME</string>
     <string name="share_header_subtitle">File transfer</string>
     <string name="share_status_select_server">Select Windows server</string>

@@ -893,10 +893,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleStorageRootEnabledChanged(root: StorageRootEntry, enabled: Boolean) {
-        storageRootsRepository.setEnabled(root.id, enabled)
         if (enabled && root.accessState != StorageAccessState.READY) {
-            handleStorageRootSelected(root)
+            refreshStorageRootsState()
+            showStoragePermissionDialog(root)
+            return
         }
+
+        storageRootsRepository.setEnabled(root.id, enabled)
         refreshStorageRootsState()
         DropMeDeviceService.refreshStorageRoots(this)
     }
@@ -911,21 +914,59 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleStorageRootSelected(root: StorageRootEntry) {
+        if (root.accessState != StorageAccessState.READY) {
+            showStoragePermissionDialog(root)
+        }
+    }
+
+    private fun showStoragePermissionDialog(root: StorageRootEntry) {
         when (root.accessState) {
             StorageAccessState.READY -> Unit
-            StorageAccessState.NEEDS_ALL_FILES_ACCESS,
+            StorageAccessState.NEEDS_ALL_FILES_ACCESS -> {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.storage_permission_required_title)
+                    .setMessage(
+                        getString(
+                            R.string.storage_permission_required_all_files,
+                            root.displayName,
+                        ),
+                    )
+                    .setPositiveButton(R.string.storage_permission_grant) { _, _ ->
+                        manageAllFilesAccessLauncher.launch(
+                            storageRootsRepository.buildManageAllFilesAccessIntent(),
+                        )
+                    }
+                    .setNegativeButton(R.string.remote_connection_close, null)
+                    .show()
+            }
+
             StorageAccessState.NEEDS_TREE_GRANT -> {
-                manageAllFilesAccessLauncher.launch(
-                    storageRootsRepository.buildManageAllFilesAccessIntent(),
-                )
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.storage_permission_required_title)
+                    .setMessage(
+                        getString(
+                            R.string.storage_permission_required_tree,
+                            root.displayName,
+                        ),
+                    )
+                    .setPositiveButton(R.string.storage_permission_grant) { _, _ ->
+                        addStorageRootLauncher.launch(root.treeUri)
+                    }
+                    .setNegativeButton(R.string.remote_connection_close, null)
+                    .show()
             }
 
             StorageAccessState.UNAVAILABLE -> {
-                Toast.makeText(
-                    this,
-                    R.string.storage_state_unavailable,
-                    Toast.LENGTH_SHORT,
-                ).show()
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.storage_permission_required_title)
+                    .setMessage(
+                        getString(
+                            R.string.storage_permission_unavailable,
+                            root.displayName,
+                        ),
+                    )
+                    .setPositiveButton(R.string.remote_connection_close, null)
+                    .show()
             }
         }
     }
