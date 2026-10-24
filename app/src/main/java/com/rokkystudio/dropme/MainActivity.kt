@@ -39,6 +39,7 @@ import com.rokkystudio.dropme.network.WindowsServer
 import com.rokkystudio.dropme.network.WindowsServerScanner
 import com.rokkystudio.dropme.network.WifiNetworkProvider
 import com.rokkystudio.dropme.service.DropMeDeviceService
+import com.rokkystudio.dropme.storage.IncomingFilesSettings
 import com.rokkystudio.dropme.storage.StorageAccessState
 import com.rokkystudio.dropme.storage.StorageRootEntry
 import com.rokkystudio.dropme.storage.StorageRootsRepository
@@ -63,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var deviceScanner: WindowsServerScanner
     private lateinit var remoteFileClient: RemoteFileClient
     private lateinit var storageRootsRepository: StorageRootsRepository
+    private lateinit var incomingFilesSettings: IncomingFilesSettings
     private lateinit var deviceTrustStore: DeviceTrustStore
     private lateinit var connectionDevicesScreen: ConnectionDevicesScreen
     private lateinit var storageRootsScreen: StorageRootsScreen
@@ -78,6 +80,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saveDeviceNameButton: NeoButtonView
     private lateinit var addStorageRootButton: NeoIconActionView
     private lateinit var storageRootsContainer: LinearLayout
+    private lateinit var incomingFolderText: TextView
+    private lateinit var incomingDateFoldersCheckBox: CheckBox
     private lateinit var progressBar: ProgressBar
     private lateinit var serverListContainer: LinearLayout
     private lateinit var noServersText: TextView
@@ -174,6 +178,7 @@ class MainActivity : AppCompatActivity() {
         bindActions()
         renderTopBar()
         renderLocalIdentity()
+        renderIncomingFilesSettings()
         refreshStorageRootsState()
         renderTrustLists()
         renderDeviceList()
@@ -185,6 +190,7 @@ class MainActivity : AppCompatActivity() {
         activityStarted = true
         window.decorView.post { requestNotificationPermissionIfNeeded() }
         renderLocalIdentity()
+        renderIncomingFilesSettings()
         refreshStorageRootsState()
         renderTrustLists()
         if (selectedScreen == MainScreen.CONNECTION) {
@@ -195,6 +201,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         renderLocalIdentity()
+        renderIncomingFilesSettings()
         refreshStorageRootsState()
         renderTrustLists()
     }
@@ -225,6 +232,8 @@ class MainActivity : AppCompatActivity() {
         saveDeviceNameButton = findViewById(R.id.mainSaveDeviceNameButton)
         addStorageRootButton = findViewById(R.id.mainAddStorageRootButton)
         storageRootsContainer = findViewById(R.id.mainStorageRootsContainer)
+        incomingFolderText = findViewById(R.id.mainIncomingFolderText)
+        incomingDateFoldersCheckBox = findViewById(R.id.mainIncomingDateFoldersCheckBox)
         progressBar = findViewById(R.id.mainProgressBar)
         serverListContainer = findViewById(R.id.mainServerListContainer)
         noServersText = findViewById(R.id.mainNoServersText)
@@ -251,6 +260,7 @@ class MainActivity : AppCompatActivity() {
         deviceScanner = WindowsServerScanner()
         remoteFileClient = RemoteFileClient(applicationContext)
         storageRootsRepository = StorageRootsRepository(applicationContext)
+        incomingFilesSettings = IncomingFilesSettings(applicationContext)
         deviceTrustStore = DeviceTrustStore(applicationContext)
         connectionDevicesScreen = ConnectionDevicesScreen(
             context = this,
@@ -351,6 +361,11 @@ class MainActivity : AppCompatActivity() {
             addStorageRootLauncher.launch(null)
         }
 
+        incomingDateFoldersCheckBox.setOnClickListener {
+            incomingFilesSettings.setCreateDateFolders(incomingDateFoldersCheckBox.isChecked)
+            renderIncomingFilesSettings()
+        }
+
         deviceServiceCheckBox.setOnClickListener {
             if (deviceServiceCheckBox.isChecked) {
                 identityStore.setDeviceServiceEnabled(true)
@@ -361,6 +376,20 @@ class MainActivity : AppCompatActivity() {
             }
             renderLocalIdentity()
         }
+    }
+
+    /**
+     * Показывает активную папку входящих файлов и текущий режим группировки по дате.
+     */
+    private fun renderIncomingFilesSettings() {
+        incomingDateFoldersCheckBox.isChecked = incomingFilesSettings.createDateFolders()
+        val baseDirectory = File(Environment.getExternalStorageDirectory(), "DROPME")
+        val activeDirectory = if (incomingFilesSettings.createDateFolders()) {
+            File(baseDirectory, java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()))
+        } else {
+            baseDirectory
+        }
+        incomingFolderText.text = activeDirectory.absolutePath
     }
 
     private fun renderTopBar() {

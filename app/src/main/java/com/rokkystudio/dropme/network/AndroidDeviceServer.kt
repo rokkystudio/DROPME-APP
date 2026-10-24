@@ -17,6 +17,7 @@ import com.rokkystudio.dropme.device.DeviceIdentityStore
 import com.rokkystudio.dropme.device.DeviceTrustStore
 import com.rokkystudio.dropme.device.DeviceSessionRegistry
 import com.rokkystudio.dropme.device.IncomingApprovalCoordinator
+import com.rokkystudio.dropme.storage.IncomingFilesSettings
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -30,6 +31,8 @@ import java.net.Socket
 import java.net.SocketException
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -241,10 +244,7 @@ class AndroidDeviceServer {
             return
         }
 
-        val incomingDirectory = File(
-            Environment.getExternalStorageDirectory(),
-            INCOMING_RELATIVE_PATH,
-        )
+        val incomingDirectory = resolveIncomingDirectory()
         if ((!incomingDirectory.exists() && !incomingDirectory.mkdirs()) || !incomingDirectory.isDirectory) {
             writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
             return
@@ -627,6 +627,20 @@ class AndroidDeviceServer {
         }
     }
 
+    /**
+     * Возвращает активную папку входящих файлов по пользовательской настройке.
+     * Без группировки файлы сохраняются прямо в DROPME, с группировкой — в подпапку yyyy-MM-dd.
+     */
+    private fun resolveIncomingDirectory(): File {
+        val root = File(Environment.getExternalStorageDirectory(), "DROPME")
+        if (!IncomingFilesSettings(AppContextHolder.context).createDateFolders()) {
+            return root
+        }
+
+        val dateFolder = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        return File(root, dateFolder)
+    }
+
     private fun uniqueTarget(directory: File, fileName: String): File {
         var target = File(directory, fileName)
         if (!target.exists()) {
@@ -636,7 +650,7 @@ class AndroidDeviceServer {
         val dot = fileName.lastIndexOf('.')
         val stem = if (dot > 0) fileName.substring(0, dot) else fileName
         val extension = if (dot > 0) fileName.substring(dot) else ""
-        var index = 2
+        var index = 1
         while (target.exists()) {
             target = File(directory, "$stem ($index)$extension")
             index++
@@ -667,7 +681,6 @@ class AndroidDeviceServer {
         private const val SESSION_AUTHORIZATION_MS = 10 * 60 * 1000L
         private const val PURPOSE_SHARE = "share"
         private const val PURPOSE_FILES = "files"
-        private const val INCOMING_RELATIVE_PATH = "DROPME/Incoming"
         private const val HEADER_DEVICE_ID = "x-dropme-device-id"
         private const val HEADER_DEVICE_NAME = "x-dropme-device-name"
         private const val HEADER_SHA256 = "x-dropme-sha256"

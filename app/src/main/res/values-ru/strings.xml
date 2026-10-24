@@ -30,6 +30,8 @@
     <string name="service_notification_connected_title">DROPME активен</string>
     <string name="service_notification_connected_text">Хранилище Android подключено к %1$s.</string>
     <string name="main_storage_roots_title">Мои хранилища</string>
+    <string name="main_incoming_files_title">Входящие файлы</string>
+    <string name="main_incoming_date_folders">Создавать папки по дате</string>
     <string name="storage_custom_folder">Папка</string>
     <string name="storage_add_folder">Добавить папку</string>
     <string name="storage_add_failed">Не удалось добавить папку</string>
