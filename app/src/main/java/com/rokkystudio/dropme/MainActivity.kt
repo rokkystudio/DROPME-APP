@@ -140,6 +140,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            Unit
+        }
+
     private val addStorageRootLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri == null) {
@@ -161,6 +166,7 @@ class MainActivity : AppCompatActivity() {
 
         bindViews()
         bindDependencies()
+        requestNotificationPermissionIfNeeded()
         bindActions()
         renderTopBar()
         renderLocalIdentity()
@@ -1115,6 +1121,21 @@ class MainActivity : AppCompatActivity() {
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
     }
+
+    /**
+     * Запрашивает право показывать approval-уведомления на Android 13+.
+     * Без этого background approval может быть полностью скрыт системой.
+     */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     private fun restartDeviceServiceIfEnabled() {
         if (identityStore.isDeviceServiceEnabled()) {
             DropMeDeviceService.start(this)

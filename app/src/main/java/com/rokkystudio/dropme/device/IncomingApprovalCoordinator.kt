@@ -226,6 +226,22 @@ object IncomingApprovalCoordinator {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val allowIntent = PendingIntent.getBroadcast(
+            context,
+            APPROVAL_ALLOW_REQUEST_CODE,
+            Intent(context, ApprovalActionReceiver::class.java)
+                .setAction(ApprovalActionReceiver.ACTION_ALLOW)
+                .putExtra(ApprovalActionReceiver.EXTRA_REQUEST_ID, request.requestId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val denyIntent = PendingIntent.getBroadcast(
+            context,
+            APPROVAL_DENY_REQUEST_CODE,
+            Intent(context, ApprovalActionReceiver::class.java)
+                .setAction(ApprovalActionReceiver.ACTION_DENY)
+                .putExtra(ApprovalActionReceiver.EXTRA_REQUEST_ID, request.requestId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher_monochrome)
             .setContentTitle(context.getString(R.string.approval_notification_title))
@@ -237,7 +253,19 @@ object IncomingApprovalCoordinator {
                 ),
             )
             .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
+            .addAction(
+                R.mipmap.ic_launcher_monochrome,
+                context.getString(R.string.approval_deny),
+                denyIntent,
+            )
+            .addAction(
+                R.mipmap.ic_launcher_monochrome,
+                context.getString(R.string.approval_allow),
+                allowIntent,
+            )
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(false)
+            .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
@@ -269,4 +297,6 @@ object IncomingApprovalCoordinator {
     private const val IP_BINDING_LIFETIME_MS = 10L * 60L * 1000L
     private const val NOTIFICATION_CHANNEL_ID = "dropme_approval"
     private const val APPROVAL_NOTIFICATION_ID = 5000
+    private const val APPROVAL_ALLOW_REQUEST_CODE = 5001
+    private const val APPROVAL_DENY_REQUEST_CODE = 5002
 }

@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".DropMeApplication"
@@ -39,6 +40,10 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/Theme.DropMe" />
+
+        <receiver
+            android:name=".device.ApprovalActionReceiver"
+            android:exported="false" />
 
         <activity
             android:name=".RemoteFilesActivity"
