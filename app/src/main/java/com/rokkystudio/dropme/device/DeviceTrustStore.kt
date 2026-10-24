@@ -42,13 +42,32 @@ class DeviceTrustStore(
         migrateLegacyDecisions()
     }
 
+    /**
+     * Возвращает эффективное решение для операции.
+     *
+     * Полный доступ к папкам включает возможность принимать входящие файлы.
+     * Разрешение на приём файлов не даёт доступ к папкам.
+     */
     fun getDecision(deviceId: String, purpose: String): Decision {
-        val suffix = when (purpose) {
-            PURPOSE_SHARE -> SUFFIX_SHARE_DECISION
-            PURPOSE_FILES -> SUFFIX_FILES_DECISION
-            else -> return Decision.UNKNOWN
+        if (purpose == PURPOSE_SHARE) {
+            val filesDecision = parseDecision(
+                preferences.getString(key(deviceId, SUFFIX_FILES_DECISION), null),
+            )
+            if (filesDecision == Decision.ALLOWED) {
+                return Decision.ALLOWED
+            }
+            return parseDecision(
+                preferences.getString(key(deviceId, SUFFIX_SHARE_DECISION), null),
+            )
         }
-        return parseDecision(preferences.getString(key(deviceId, suffix), null))
+
+        if (purpose == PURPOSE_FILES) {
+            return parseDecision(
+                preferences.getString(key(deviceId, SUFFIX_FILES_DECISION), null),
+            )
+        }
+
+        return Decision.UNKNOWN
     }
 
     fun remember(
