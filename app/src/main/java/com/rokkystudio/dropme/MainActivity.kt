@@ -166,7 +166,6 @@ class MainActivity : AppCompatActivity() {
 
         bindViews()
         bindDependencies()
-        requestNotificationPermissionIfNeeded()
         bindActions()
         renderTopBar()
         renderLocalIdentity()
@@ -179,6 +178,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         activityStarted = true
+        window.decorView.post { requestNotificationPermissionIfNeeded() }
         renderLocalIdentity()
         refreshStorageRootsState()
         renderTrustLists()
