@@ -166,7 +166,7 @@
     <string name="incoming_transfer_title">Receiving %1$s</string>
     <string name="incoming_transfer_progress">From %1$s • %2$d%% • %3$s / %4$s</string>
     <string name="incoming_transfer_saved">%1$s saved successfully</string>
-    <string name="incoming_transfer_saved_detail">Saved to DROPME/Incoming</string>
+    <string name="incoming_transfer_saved_detail">Saved to %1$s</string>
     <string name="incoming_transfer_failed">Could not receive %1$s</string>
     <string name="notification_permission_title">Notifications are required</string>
     <string name="notification_permission_message">DROPME needs notification access to show incoming connection approval requests while the app is in the background.</string>

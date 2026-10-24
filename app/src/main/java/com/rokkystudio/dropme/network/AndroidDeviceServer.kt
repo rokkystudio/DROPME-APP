@@ -2,6 +2,7 @@ package com.rokkystudio.dropme.network
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -336,7 +337,7 @@ class AndroidDeviceServer {
                 HEADER_SHA256_RESPONSE to storedSha256,
             )
             writeResponse(output, 201, "Created", "application/json; charset=utf-8", ByteArray(0), headers)
-            reportIncomingCompleted(fileName)
+            reportIncomingCompleted(target)
             Log.d(
                 LOG_TAG,
                 "Incoming share saved: ${target.absolutePath} from ${requester.name} (${requester.id})",
@@ -543,22 +544,34 @@ class AndroidDeviceServer {
             .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
     }
 
-    /** Сообщает об успешном сохранении уже проверенного SHA-256 файла. */
-    private fun reportIncomingCompleted(fileName: String) {
+    /**
+     * Сообщает об успешном сохранении уже проверенного SHA-256 файла и публикует его
+     * в системном индексе общего хранилища, чтобы файловые менеджеры увидели файл сразу.
+     */
+    private fun reportIncomingCompleted(file: File) {
         val context = AppContextHolder.context
         createIncomingTransferChannel(context)
-        val text = context.getString(R.string.incoming_transfer_saved, fileName)
+        MediaScannerConnection.scanFile(
+            context,
+            arrayOf(file.absolutePath),
+            null,
+            null,
+        )
+        val title = context.getString(R.string.incoming_transfer_saved, file.name)
+        val folder = file.parentFile?.absolutePath.orEmpty()
+        val detail = context.getString(R.string.incoming_transfer_saved_detail, folder)
         val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setContentTitle(text)
-            .setContentText(context.getString(R.string.incoming_transfer_saved_detail))
+            .setContentTitle(title)
+            .setContentText(detail)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         context.getSystemService(NotificationManager::class.java)
             .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "$title\n$detail", Toast.LENGTH_LONG).show()
         }
     }
 
