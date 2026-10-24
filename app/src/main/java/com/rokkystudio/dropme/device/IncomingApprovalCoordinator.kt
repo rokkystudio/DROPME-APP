@@ -12,10 +12,14 @@ import com.rokkystudio.dropme.R
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
 /**
  * Координирует синхронный сетевой запрос разрешения с пользовательским диалогом Android.
+ *
+ * Одинаковые pending-запросы объединяются в один диалог, одновременно показывается не больше
+ * одного подтверждения, а один IP временно привязывается к одному device ID.
  */
 object IncomingApprovalCoordinator {
     data class Request(
@@ -34,8 +38,21 @@ object IncomingApprovalCoordinator {
         @Volatile var resolved: Boolean = false,
     )
 
-    private val pending = ConcurrentHashMap<String, Pending>()
+    private data class IpBinding(
+        val deviceId: String,
+        var lastSeenAt: Long,
+    )
 
+    private val lock = Any()
+    private val pending = ConcurrentHashMap<String, Pending>()
+    private val pendingByIdentity = HashMap<String, Pending>()
+    private val ipBindings = HashMap<String, IpBinding>()
+    private val approvalUiGate = Semaphore(1, true)
+
+    /**
+     * Проверяет доверие и при необходимости показывает один popup-dialog.
+     * Параллельный одинаковый запрос ждёт уже открытый диалог.
+     */
     fun authorize(
         context: Context,
         deviceId: String,
@@ -44,6 +61,10 @@ object IncomingApprovalCoordinator {
         purpose: String,
         itemName: String? = null,
     ): Boolean {
+        if (!bindIdentity(remoteIp, deviceId)) {
+            return false
+        }
+
         val trustStore = DeviceTrustStore(context)
         when (trustStore.getDecision(deviceId)) {
             DeviceTrustStore.Decision.ALLOWED -> {
@@ -59,27 +80,73 @@ object IncomingApprovalCoordinator {
             DeviceTrustStore.Decision.UNKNOWN -> Unit
         }
 
-        val request = Request(
-            requestId = UUID.randomUUID().toString(),
-            deviceId = deviceId,
-            deviceName = deviceName,
-            remoteIp = remoteIp,
-            purpose = purpose,
-            itemName = itemName,
-        )
-        val state = Pending(request)
-        pending[request.requestId] = state
-        showApprovalUi(context, request)
+        val identityKey = "$remoteIp:$deviceId:$purpose"
+        val state: Pending
+        val owner: Boolean
+        synchronized(lock) {
+            val existing = pendingByIdentity[identityKey]
+            if (existing != null) {
+                state = existing
+                owner = false
+            } else {
+                val request = Request(
+                    requestId = UUID.randomUUID().toString(),
+                    deviceId = deviceId,
+                    deviceName = deviceName,
+                    remoteIp = remoteIp,
+                    purpose = purpose,
+                    itemName = itemName,
+                )
+                state = Pending(request)
+                pending[request.requestId] = state
+                pendingByIdentity[identityKey] = state
+                owner = true
+            }
+        }
 
-        state.latch.await(APPROVAL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        pending.remove(request.requestId)
-        context.getSystemService(NotificationManager::class.java)
-            .cancel(notificationId(request.requestId))
-        return state.resolved && state.allowed
+        if (!owner) {
+            state.latch.await(APPROVAL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            return state.resolved && state.allowed
+        }
+
+        var gateTaken = false
+        try {
+            gateTaken = approvalUiGate.tryAcquire(
+                APPROVAL_QUEUE_WAIT_SECONDS,
+                TimeUnit.SECONDS,
+            )
+            if (!gateTaken) {
+                return false
+            }
+
+            showApprovalUi(context, state.request)
+            state.latch.await(APPROVAL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            return state.resolved && state.allowed
+        } finally {
+            if (!state.resolved) {
+                state.allowed = false
+                state.resolved = true
+                state.latch.countDown()
+            }
+
+            pending.remove(state.request.requestId)
+            synchronized(lock) {
+                pendingByIdentity.remove(identityKey, state)
+            }
+            context.getSystemService(NotificationManager::class.java)
+                .cancel(APPROVAL_NOTIFICATION_ID)
+
+            if (gateTaken) {
+                approvalUiGate.release()
+            }
+        }
     }
 
     fun get(requestId: String): Request? = pending[requestId]?.request
 
+    /**
+     * Завершает активный popup-dialog и при необходимости сохраняет постоянное решение.
+     */
     fun resolve(
         context: Context,
         requestId: String,
@@ -87,6 +154,10 @@ object IncomingApprovalCoordinator {
         remember: Boolean,
     ) {
         val state = pending[requestId] ?: return
+        if (state.resolved) {
+            return
+        }
+
         if (remember) {
             DeviceTrustStore(context).remember(
                 deviceId = state.request.deviceId,
@@ -104,6 +175,42 @@ object IncomingApprovalCoordinator {
         state.latch.countDown()
     }
 
+    /**
+     * На короткое время закрепляет IP за первым device ID.
+     * Запрос с другим ID с того же IP отклоняется без показа UI.
+     */
+    private fun bindIdentity(remoteIp: String, deviceId: String): Boolean {
+        if (remoteIp.isBlank()) {
+            return false
+        }
+
+        val now = System.currentTimeMillis()
+        synchronized(lock) {
+            val iterator = ipBindings.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                if (now - entry.value.lastSeenAt >= IP_BINDING_LIFETIME_MS) {
+                    iterator.remove()
+                }
+            }
+
+            val binding = ipBindings[remoteIp]
+            if (binding != null) {
+                if (binding.deviceId != deviceId) {
+                    return false
+                }
+                binding.lastSeenAt = now
+                return true
+            }
+
+            ipBindings[remoteIp] = IpBinding(
+                deviceId = deviceId,
+                lastSeenAt = now,
+            )
+            return true
+        }
+    }
+
     private fun showApprovalUi(context: Context, request: Request) {
         createNotificationChannel(context)
         val intent = DeviceApprovalActivity.createIntent(context, request.requestId)
@@ -115,7 +222,7 @@ object IncomingApprovalCoordinator {
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            notificationId(request.requestId),
+            APPROVAL_NOTIFICATION_ID,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -132,11 +239,10 @@ object IncomingApprovalCoordinator {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-
             .build()
 
         context.getSystemService(NotificationManager::class.java)
-            .notify(notificationId(request.requestId), notification)
+            .notify(APPROVAL_NOTIFICATION_ID, notification)
     }
 
     private fun createNotificationChannel(context: Context) {
@@ -158,11 +264,9 @@ object IncomingApprovalCoordinator {
         )
     }
 
-    private fun notificationId(requestId: String): Int {
-        return NOTIFICATION_ID_BASE + (requestId.hashCode() and 0x0fff)
-    }
-
     private const val APPROVAL_TIMEOUT_SECONDS = 60L
+    private const val APPROVAL_QUEUE_WAIT_SECONDS = 2L
+    private const val IP_BINDING_LIFETIME_MS = 10L * 60L * 1000L
     private const val NOTIFICATION_CHANNEL_ID = "dropme_approval"
-    private const val NOTIFICATION_ID_BASE = 5000
+    private const val APPROVAL_NOTIFICATION_ID = 5000
 }

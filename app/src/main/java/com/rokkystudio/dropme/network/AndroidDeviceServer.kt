@@ -188,7 +188,7 @@ class AndroidDeviceServer {
             return
         }
 
-        sessionAuthorizations[authorizationKey(requester.id, purpose)] =
+        sessionAuthorizations[authorizationKey(requester.id, remoteIp, purpose)] =
             System.currentTimeMillis() + SESSION_AUTHORIZATION_MS
         if (purpose == PURPOSE_FILES) {
             DeviceSessionRegistry.grant(remoteIp, purpose)
@@ -318,7 +318,7 @@ class AndroidDeviceServer {
             DeviceTrustStore.Decision.UNKNOWN -> Unit
         }
 
-        val key = authorizationKey(requester.id, purpose)
+        val key = authorizationKey(requester.id, remoteIp, purpose)
         val expiry = sessionAuthorizations[key] ?: 0L
         if (expiry >= System.currentTimeMillis()) {
             return true
@@ -470,7 +470,8 @@ class AndroidDeviceServer {
         return target
     }
 
-    private fun authorizationKey(deviceId: String, purpose: String): String = "$deviceId:$purpose"
+    private fun authorizationKey(deviceId: String, remoteIp: String, purpose: String): String =
+        "$deviceId:$remoteIp:$purpose"
 
     private data class Request(
         val method: String,
