@@ -1036,6 +1036,17 @@ class MainActivity : AppCompatActivity() {
                 textSize = 10f
             })
             row.addView(TextView(this).apply {
+                text = getString(
+                    R.string.main_trust_share_permission,
+                    trustDecisionText(device.shareDecision),
+                ) + "  •  " + getString(
+                    R.string.main_trust_files_permission,
+                    trustDecisionText(device.filesDecision),
+                )
+                setTextColor(getColor(R.color.text_secondary))
+                textSize = 10f
+            })
+            row.addView(TextView(this).apply {
                 text = DateFormat.getDateTimeInstance(
                     DateFormat.SHORT,
                     DateFormat.SHORT,
@@ -1054,19 +1065,22 @@ class MainActivity : AppCompatActivity() {
                 NeoButtonView(this).apply {
                     text = getString(
                         if (replacement == DeviceTrustStore.Decision.ALLOWED) {
-                            R.string.main_trust_allow
+                            R.string.main_trust_reset
                         } else {
                             R.string.main_trust_block
                         },
                     )
                     isAllCaps = false
                     setOnClickListener {
-                        deviceTrustStore.remember(
-                            deviceId = device.deviceId,
-                            deviceName = device.deviceName,
-                            ip = device.lastIp,
-                            decision = replacement,
-                        )
+                        if (replacement == DeviceTrustStore.Decision.BLOCKED) {
+                            deviceTrustStore.blockAll(
+                                deviceId = device.deviceId,
+                                deviceName = device.deviceName,
+                                ip = device.lastIp,
+                            )
+                        } else {
+                            deviceTrustStore.clearDecisions(device.deviceId)
+                        }
                         renderTrustLists()
                     }
                 },
@@ -1121,6 +1135,16 @@ class MainActivity : AppCompatActivity() {
                 },
             )
         }
+    }
+
+    private fun trustDecisionText(decision: DeviceTrustStore.Decision): String {
+        return getString(
+            when (decision) {
+                DeviceTrustStore.Decision.ALLOWED -> R.string.main_trust_allowed
+                DeviceTrustStore.Decision.BLOCKED -> R.string.main_trust_blocked
+                DeviceTrustStore.Decision.UNKNOWN -> R.string.main_trust_ask
+            },
+        )
     }
 
     private fun dp(value: Int): Int {

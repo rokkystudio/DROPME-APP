@@ -1,8 +1,17 @@
 package com.rokkystudio.dropme.network
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.text.format.Formatter
 import android.util.Log
+import android.widget.Toast
+import androidx.core.app.NotificationCompat
+import com.rokkystudio.dropme.R
 import com.rokkystudio.dropme.device.DeviceIdentityStore
 import com.rokkystudio.dropme.device.DeviceTrustStore
 import com.rokkystudio.dropme.device.DeviceSessionRegistry
@@ -244,8 +253,16 @@ class AndroidDeviceServer {
         val temporary = File(incomingDirectory, ".${target.name}.${System.nanoTime()}.tmp")
         val digest = MessageDigest.getInstance("SHA-256")
         var remaining = request.contentLength
+        var receivedBytes = 0L
+        var lastProgressPercent = -1
 
         try {
+            reportIncomingProgress(
+                fileName = fileName,
+                senderName = requester.name,
+                receivedBytes = 0L,
+                totalBytes = request.contentLength,
+            )
             FileOutputStream(temporary).buffered().use { fileOutput ->
                 val buffer = ByteArray(64 * 1024)
                 while (remaining > 0L) {
@@ -263,6 +280,21 @@ class AndroidDeviceServer {
                     fileOutput.write(buffer, 0, read)
                     digest.update(buffer, 0, read)
                     remaining -= read.toLong()
+                    receivedBytes += read.toLong()
+                    val progressPercent = if (request.contentLength <= 0L) {
+                        100
+                    } else {
+                        ((receivedBytes * 100L) / request.contentLength).toInt().coerceIn(0, 100)
+                    }
+                    if (progressPercent != lastProgressPercent) {
+                        lastProgressPercent = progressPercent
+                        reportIncomingProgress(
+                            fileName = fileName,
+                            senderName = requester.name,
+                            receivedBytes = receivedBytes,
+                            totalBytes = request.contentLength,
+                        )
+                    }
                 }
                 fileOutput.flush()
             }
@@ -275,11 +307,13 @@ class AndroidDeviceServer {
                 ?.lowercase(Locale.US)
             if (expectedSha256 == null || !SHA256_PATTERN.matches(expectedSha256)) {
                 temporary.delete()
+                reportIncomingFailed(fileName)
                 writeResponse(output, 400, "Bad Request", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
             if (expectedSha256 != sha256) {
                 temporary.delete()
+                reportIncomingFailed(fileName)
                 writeResponse(output, 422, "Unprocessable Content", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
@@ -292,6 +326,7 @@ class AndroidDeviceServer {
             val storedSha256 = computeFileSha256(target)
             if (storedSha256 != expectedSha256 || target.length() != request.contentLength) {
                 target.delete()
+                reportIncomingFailed(fileName)
                 writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
@@ -301,12 +336,14 @@ class AndroidDeviceServer {
                 HEADER_SHA256_RESPONSE to storedSha256,
             )
             writeResponse(output, 201, "Created", "application/json; charset=utf-8", ByteArray(0), headers)
+            reportIncomingCompleted(fileName)
             Log.d(
                 LOG_TAG,
                 "Incoming share saved: ${target.absolutePath} from ${requester.name} (${requester.id})",
             )
         } catch (throwable: Throwable) {
             temporary.delete()
+            reportIncomingFailed(fileName)
             Log.w(LOG_TAG, "Incoming share failed", throwable)
             writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
         }
@@ -319,7 +356,7 @@ class AndroidDeviceServer {
         itemName: String?,
     ): Boolean {
         val trustStore = DeviceTrustStore(AppContextHolder.context)
-        when (trustStore.getDecision(requester.id)) {
+        when (trustStore.getDecision(requester.id, purpose)) {
             DeviceTrustStore.Decision.ALLOWED -> {
                 trustStore.touch(requester.id, requester.name, remoteIp)
                 return true
@@ -471,6 +508,93 @@ class AndroidDeviceServer {
     /**
      * Вычисляет SHA-256 уже сохранённого файла для финальной проверки целостности.
      */
+    /** Показывает прогресс входящего файла в системном уведомлении. */
+    private fun reportIncomingProgress(
+        fileName: String,
+        senderName: String,
+        receivedBytes: Long,
+        totalBytes: Long,
+    ) {
+        val context = AppContextHolder.context
+        createIncomingTransferChannel(context)
+        val percent = if (totalBytes <= 0L) {
+            0
+        } else {
+            ((receivedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
+        }
+        val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
+            .setContentTitle(context.getString(R.string.incoming_transfer_title, fileName))
+            .setContentText(
+                context.getString(
+                    R.string.incoming_transfer_progress,
+                    senderName,
+                    percent,
+                    Formatter.formatShortFileSize(context, receivedBytes.coerceAtLeast(0L)),
+                    Formatter.formatShortFileSize(context, totalBytes.coerceAtLeast(0L)),
+                ),
+            )
+            .setProgress(100, percent, totalBytes <= 0L)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
+    }
+
+    /** Сообщает об успешном сохранении уже проверенного SHA-256 файла. */
+    private fun reportIncomingCompleted(fileName: String) {
+        val context = AppContextHolder.context
+        createIncomingTransferChannel(context)
+        val text = context.getString(R.string.incoming_transfer_saved, fileName)
+        val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
+            .setContentTitle(text)
+            .setContentText(context.getString(R.string.incoming_transfer_saved_detail))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun reportIncomingFailed(fileName: String) {
+        val context = AppContextHolder.context
+        createIncomingTransferChannel(context)
+        val text = context.getString(R.string.incoming_transfer_failed, fileName)
+        val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
+            .setContentTitle(text)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
+    }
+
+    private fun createIncomingTransferChannel(context: android.content.Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (manager.getNotificationChannel(INCOMING_TRANSFER_CHANNEL_ID) != null) {
+            return
+        }
+        manager.createNotificationChannel(
+            NotificationChannel(
+                INCOMING_TRANSFER_CHANNEL_ID,
+                context.getString(R.string.incoming_transfer_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = context.getString(R.string.incoming_transfer_channel_description)
+            },
+        )
+    }
+
     private fun computeFileSha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         FileInputStream(file).buffered().use { input ->
@@ -536,6 +660,8 @@ class AndroidDeviceServer {
         private const val HEADER_SHA256 = "x-dropme-sha256"
         private const val HEADER_LENGTH_RESPONSE = "X-DROPME-Length"
         private const val HEADER_SHA256_RESPONSE = "X-DROPME-SHA256"
+        private const val INCOMING_TRANSFER_CHANNEL_ID = "dropme_incoming_transfers"
+        private const val INCOMING_TRANSFER_NOTIFICATION_ID = 5100
         private const val LOG_TAG = "DROPME"
         private val DEVICE_ID_PATTERN = Regex("^[0-9a-f]{32}$")
         private val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")

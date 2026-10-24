@@ -155,8 +155,19 @@
     <string name="approval_deny">Deny</string>
     <string name="approval_notification_title">DROPME permission required</string>
     <string name="approval_notification_text">%1$s (%2$s) is waiting for permission</string>
+    <string name="approval_notification_share_title">Allow incoming files?</string>
+    <string name="approval_notification_share_text">%1$s (%2$s) wants to send files to this device</string>
+    <string name="approval_notification_files_title">Allow folder access?</string>
+    <string name="approval_notification_files_text">%1$s (%2$s) wants access to this device folders</string>
     <string name="approval_channel_name">DROPME permissions</string>
     <string name="approval_channel_description">Incoming connection and file transfer permission requests.</string>
+    <string name="incoming_transfer_channel_name">Incoming files</string>
+    <string name="incoming_transfer_channel_description">Progress and completion of incoming DROPME file transfers.</string>
+    <string name="incoming_transfer_title">Receiving %1$s</string>
+    <string name="incoming_transfer_progress">From %1$s • %2$d%% • %3$s / %4$s</string>
+    <string name="incoming_transfer_saved">%1$s saved successfully</string>
+    <string name="incoming_transfer_saved_detail">Saved to DROPME/Incoming</string>
+    <string name="incoming_transfer_failed">Could not receive %1$s</string>
     <string name="notification_permission_title">Notifications are required</string>
     <string name="notification_permission_message">DROPME needs notification access to show incoming connection approval requests while the app is in the background.</string>
     <string name="notification_permission_open_settings">Open notification settings</string>
@@ -167,6 +178,12 @@
     <string name="main_known_device_info">IP: %1$s • ID: %2$s</string>
     <string name="main_trust_allow">Allow</string>
     <string name="main_trust_block">Block</string>
+    <string name="main_trust_reset">Reset decisions</string>
+    <string name="main_trust_share_permission">Receive files: %1$s</string>
+    <string name="main_trust_files_permission">Folder access: %1$s</string>
+    <string name="main_trust_allowed">allowed</string>
+    <string name="main_trust_blocked">blocked</string>
+    <string name="main_trust_ask">ask</string>
     <string name="main_trust_forget">Remove</string>
     <string name="main_trust_forget_title">Remove device?</string>
     <string name="main_trust_forget_message">Forget %1$s and ask for permission again next time it connects?</string>    <string name="navigation_device">Device</string>

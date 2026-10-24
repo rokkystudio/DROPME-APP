@@ -155,8 +155,19 @@
     <string name="approval_deny">Отклонить</string>
     <string name="approval_notification_title">Требуется разрешение DROPME</string>
     <string name="approval_notification_text">%1$s (%2$s) ожидает разрешения</string>
+    <string name="approval_notification_share_title">Разрешить приём файлов?</string>
+    <string name="approval_notification_share_text">%1$s (%2$s) хочет отправить файлы на это устройство</string>
+    <string name="approval_notification_files_title">Разрешить доступ к папкам?</string>
+    <string name="approval_notification_files_text">%1$s (%2$s) хочет получить доступ к папкам этого устройства</string>
     <string name="approval_channel_name">Разрешения DROPME</string>
     <string name="approval_channel_description">Запросы разрешения входящих подключений и передачи файлов.</string>
+    <string name="incoming_transfer_channel_name">Входящие файлы</string>
+    <string name="incoming_transfer_channel_description">Прогресс и завершение входящих передач файлов DROPME.</string>
+    <string name="incoming_transfer_title">Получение %1$s</string>
+    <string name="incoming_transfer_progress">От %1$s • %2$d%% • %3$s / %4$s</string>
+    <string name="incoming_transfer_saved">%1$s успешно сохранён</string>
+    <string name="incoming_transfer_saved_detail">Сохранено в DROPME/Incoming</string>
+    <string name="incoming_transfer_failed">Не удалось получить %1$s</string>
     <string name="notification_permission_title">Нужно разрешение на уведомления</string>
     <string name="notification_permission_message">DROPME нужны уведомления, чтобы показывать запросы подтверждения входящих подключений, когда приложение работает в фоне.</string>
     <string name="notification_permission_open_settings">Открыть настройки уведомлений</string>
@@ -167,6 +178,12 @@
     <string name="main_known_device_info">IP: %1$s • ID: %2$s</string>
     <string name="main_trust_allow">Разрешить</string>
     <string name="main_trust_block">Заблокировать</string>
+    <string name="main_trust_reset">Сбросить решения</string>
+    <string name="main_trust_share_permission">Приём файлов: %1$s</string>
+    <string name="main_trust_files_permission">Доступ к папкам: %1$s</string>
+    <string name="main_trust_allowed">разрешён</string>
+    <string name="main_trust_blocked">заблокирован</string>
+    <string name="main_trust_ask">спрашивать</string>
     <string name="main_trust_forget">Удалить</string>
     <string name="main_trust_forget_title">Удалить устройство?</string>
     <string name="main_trust_forget_message">Забыть %1$s и снова запрашивать разрешение при следующем подключении?</string>    <string name="navigation_device">Устройство</string>

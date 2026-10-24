@@ -66,7 +66,7 @@ object IncomingApprovalCoordinator {
         }
 
         val trustStore = DeviceTrustStore(context)
-        when (trustStore.getDecision(deviceId)) {
+        when (trustStore.getDecision(deviceId, purpose)) {
             DeviceTrustStore.Decision.ALLOWED -> {
                 trustStore.touch(deviceId, deviceName, remoteIp)
                 return true
@@ -163,6 +163,7 @@ object IncomingApprovalCoordinator {
                 deviceId = state.request.deviceId,
                 deviceName = state.request.deviceName,
                 ip = state.request.remoteIp,
+                purpose = state.request.purpose,
                 decision = if (allowed) {
                     DeviceTrustStore.Decision.ALLOWED
                 } else {
@@ -242,12 +243,25 @@ object IncomingApprovalCoordinator {
                 .putExtra(ApprovalActionReceiver.EXTRA_REQUEST_ID, request.requestId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val isShare = request.purpose == DeviceTrustStore.PURPOSE_SHARE
         val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setContentTitle(context.getString(R.string.approval_notification_title))
+            .setContentTitle(
+                context.getString(
+                    if (isShare) {
+                        R.string.approval_notification_share_title
+                    } else {
+                        R.string.approval_notification_files_title
+                    },
+                ),
+            )
             .setContentText(
                 context.getString(
-                    R.string.approval_notification_text,
+                    if (isShare) {
+                        R.string.approval_notification_share_text
+                    } else {
+                        R.string.approval_notification_files_text
+                    },
                     request.deviceName,
                     request.remoteIp,
                 ),
