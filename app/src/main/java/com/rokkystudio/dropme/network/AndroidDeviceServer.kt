@@ -11,6 +11,7 @@ import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.Inet4Address
 import java.net.InetSocketAddress
@@ -269,10 +270,17 @@ class AndroidDeviceServer {
             val sha256 = digest.digest().joinToString("") { byte ->
                 (byte.toInt() and 0xff).toString(16).padStart(2, '0')
             }
-            val expectedSha256 = request.headers[HEADER_SHA256]?.lowercase(Locale.US)
-            if (expectedSha256 != null && expectedSha256 != sha256) {
+            val expectedSha256 = request.headers[HEADER_SHA256]
+                ?.trim()
+                ?.lowercase(Locale.US)
+            if (expectedSha256 == null || !SHA256_PATTERN.matches(expectedSha256)) {
                 temporary.delete()
-                writeResponse(output, 409, "Conflict", "text/plain; charset=utf-8", ByteArray(0))
+                writeResponse(output, 400, "Bad Request", "text/plain; charset=utf-8", ByteArray(0))
+                return
+            }
+            if (expectedSha256 != sha256) {
+                temporary.delete()
+                writeResponse(output, 422, "Unprocessable Content", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
 
@@ -281,9 +289,16 @@ class AndroidDeviceServer {
                 temporary.delete()
             }
 
+            val storedSha256 = computeFileSha256(target)
+            if (storedSha256 != expectedSha256 || target.length() != request.contentLength) {
+                target.delete()
+                writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
+                return
+            }
+
             val headers = linkedMapOf(
-                HEADER_LENGTH_RESPONSE to request.contentLength.toString(),
-                HEADER_SHA256_RESPONSE to sha256,
+                HEADER_LENGTH_RESPONSE to target.length().toString(),
+                HEADER_SHA256_RESPONSE to storedSha256,
             )
             writeResponse(output, 201, "Created", "application/json; charset=utf-8", ByteArray(0), headers)
             Log.d(
@@ -453,6 +468,28 @@ class AndroidDeviceServer {
             .replace(Regex("[\\u0000-\\u001f]"), "_")
     }
 
+    /**
+     * Вычисляет SHA-256 уже сохранённого файла для финальной проверки целостности.
+     */
+    private fun computeFileSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) {
+                    break
+                }
+                if (read > 0) {
+                    digest.update(buffer, 0, read)
+                }
+            }
+        }
+        return digest.digest().joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+    }
+
     private fun uniqueTarget(directory: File, fileName: String): File {
         var target = File(directory, fileName)
         if (!target.exists()) {
@@ -501,6 +538,7 @@ class AndroidDeviceServer {
         private const val HEADER_SHA256_RESPONSE = "X-DROPME-SHA256"
         private const val LOG_TAG = "DROPME"
         private val DEVICE_ID_PATTERN = Regex("^[0-9a-f]{32}$")
+        private val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")
     }
 }
 
