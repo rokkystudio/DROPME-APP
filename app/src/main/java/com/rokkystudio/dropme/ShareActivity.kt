@@ -321,7 +321,7 @@ class ShareActivity : AppCompatActivity() {
                 ).also { servers ->
                     runOnUiThread {
                         if (activityStarted) {
-                            mergeDiscoveredServers(servers)
+                            replaceDiscoveredServers(servers)
                         }
                     }
                 }
@@ -360,13 +360,29 @@ class ShareActivity : AppCompatActivity() {
         servers.forEach { server ->
             merged[serverKey(server)] = server
         }
-        val updated = merged.values.sortedWith(
-            compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
-        )
+        val updated = sortDiscoveredServers(merged.values)
         if (updated != discoveredServers) {
             discoveredServers = updated
             renderServerList()
         }
+    }
+
+    /**
+     * После завершения полного scan заменяет временный список фактическим результатом,
+     * поэтому устройства, не подтвердившие присутствие в этом проходе, сразу исчезают.
+     */
+    private fun replaceDiscoveredServers(servers: List<WindowsServer>) {
+        val updated = sortDiscoveredServers(servers)
+        if (updated != discoveredServers) {
+            discoveredServers = updated
+            renderServerList()
+        }
+    }
+
+    private fun sortDiscoveredServers(servers: Collection<WindowsServer>): List<WindowsServer> {
+        return servers.sortedWith(
+            compareBy({ it.deviceName.lowercase() }, { it.host }, { it.tcpPort }),
+        )
     }
 
     private fun serverKey(server: WindowsServer): String =

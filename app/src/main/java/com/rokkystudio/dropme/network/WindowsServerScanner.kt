@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * Выполняет HTTP-поиск DROPME-устройств в Wi-Fi подсети устройства.
  */
 class WindowsServerScanner {
+    private val rememberedHosts = ConcurrentHashMap.newKeySet<String>()
     /**
      * Сообщает о прогрессе IP-сканирования подсети.
      */
@@ -37,8 +38,11 @@ class WindowsServerScanner {
         onServerFound: ((List<WindowsServer>) -> Unit)? = null,
         shouldContinue: (() -> Boolean)? = null,
     ): List<WindowsServer> {
-        val candidateHosts = buildCandidateHosts(wifiInfo.ipv4Address, wifiInfo.prefixLength)
-        if (candidateHosts.size > MAX_SCAN_HOSTS) {
+        val rememberedSnapshot = rememberedHosts.toSet()
+        val candidateHosts = (
+            rememberedSnapshot + buildCandidateHosts(wifiInfo.ipv4Address, wifiInfo.prefixLength)
+        ).distinct()
+        if (candidateHosts.size > MAX_SCAN_HOSTS + rememberedSnapshot.size) {
             throw AppError.UnknownError("Подсеть Wi-Fi слишком большая для быстрого поиска устройств").asAppException()
         }
 
@@ -64,7 +68,9 @@ class WindowsServerScanner {
                     if (shouldContinue?.invoke() == false) {
                         return@submit
                     }
-                    fetchServer(client, host)?.let { server ->
+                    val attempts = if (host in rememberedSnapshot) REMEMBERED_HOST_ATTEMPTS else 1
+                    fetchServer(client, host, attempts)?.let { server ->
+                        rememberedHosts += host
                         val existing = results.put(server.deviceId, server)
                         if (existing != server) {
                             onServerFound?.invoke(sortedDevices(results.values))
@@ -111,7 +117,25 @@ class WindowsServerScanner {
     /**
      * Выполняет HTTP-запрос к одному IP-адресу и проверяет DROPME protocol v3 identity.
      */
-    private fun fetchServer(client: OkHttpClient, host: String): WindowsServer? {
+    /**
+     * Проверяет один IP несколько раз. Повторы используются для адресов,
+     * которые уже находились в текущем сеансе приложения.
+     */
+    private fun fetchServer(
+        client: OkHttpClient,
+        host: String,
+        attempts: Int,
+    ): WindowsServer? {
+        repeat(attempts) {
+            val server = fetchServerOnce(client, host)
+            if (server != null) {
+                return server
+            }
+        }
+        return null
+    }
+
+    private fun fetchServerOnce(client: OkHttpClient, host: String): WindowsServer? {
         return try {
             for (basePath in WindowsServerApi.basePaths) {
                 val request = Request.Builder()
@@ -243,6 +267,7 @@ class WindowsServerScanner {
         const val READ_TIMEOUT_MS = 500L
         const val MAX_PARALLEL_REQUESTS = 24
         const val MAX_SCAN_HOSTS = 4096
+        const val REMEMBERED_HOST_ATTEMPTS = 3
         const val IPV4_MASK = 0xFFFFFFFFL
         val DEVICE_ID_PATTERN = Regex("^[0-9a-f]{32}$")
     }
