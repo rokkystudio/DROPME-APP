@@ -12,8 +12,8 @@ android {
         applicationId = "com.rokkystudio.dropme"
         minSdk = 26
         targetSdk = 37
-        versionCode = 145
-        versionName = "1.2.11"
+        versionCode = 146
+        versionName = "1.2.12"
     }
 
     buildFeatures {

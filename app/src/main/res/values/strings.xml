@@ -156,7 +156,11 @@
     <string name="approval_notification_title">DROPME permission required</string>
     <string name="approval_notification_text">%1$s (%2$s) is waiting for permission</string>
     <string name="approval_channel_name">DROPME permissions</string>
-    <string name="approval_channel_description">Incoming connection and file transfer permission requests.</string>    <string name="main_known_devices_title">Known devices</string>
+    <string name="approval_channel_description">Incoming connection and file transfer permission requests.</string>
+    <string name="notification_permission_title">Notifications are required</string>
+    <string name="notification_permission_message">DROPME needs notification access to show incoming connection approval requests while the app is in the background.</string>
+    <string name="notification_permission_open_settings">Open notification settings</string>
+    <string name="notification_permission_not_now">Not now</string>    <string name="main_known_devices_title">Known devices</string>
     <string name="main_allowed_devices_title">Allowed</string>
     <string name="main_blocked_devices_title">Blocked</string>
     <string name="main_trust_list_empty">List is empty</string>

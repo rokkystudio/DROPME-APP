@@ -156,7 +156,11 @@
     <string name="approval_notification_title">Требуется разрешение DROPME</string>
     <string name="approval_notification_text">%1$s (%2$s) ожидает разрешения</string>
     <string name="approval_channel_name">Разрешения DROPME</string>
-    <string name="approval_channel_description">Запросы разрешения входящих подключений и передачи файлов.</string>    <string name="main_known_devices_title">Известные устройства</string>
+    <string name="approval_channel_description">Запросы разрешения входящих подключений и передачи файлов.</string>
+    <string name="notification_permission_title">Нужно разрешение на уведомления</string>
+    <string name="notification_permission_message">DROPME нужны уведомления, чтобы показывать запросы подтверждения входящих подключений, когда приложение работает в фоне.</string>
+    <string name="notification_permission_open_settings">Открыть настройки уведомлений</string>
+    <string name="notification_permission_not_now">Не сейчас</string>    <string name="main_known_devices_title">Известные устройства</string>
     <string name="main_allowed_devices_title">Разрешённые</string>
     <string name="main_blocked_devices_title">Заблокированные</string>
     <string name="main_trust_list_empty">Список пуст</string>

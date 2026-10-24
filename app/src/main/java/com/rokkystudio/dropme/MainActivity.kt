@@ -1,6 +1,7 @@
 package com.rokkystudio.dropme
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -8,6 +9,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.Formatter
@@ -101,6 +103,7 @@ class MainActivity : AppCompatActivity() {
     private var remoteSessionAuthorized = false
     private var connectionDialog: AlertDialog? = null
     private var localBrowsePermissionPending = false
+    private var notificationPermissionRequestedThisRun = false
 
     @Volatile
     private var activityStarted = false
@@ -141,8 +144,10 @@ class MainActivity : AppCompatActivity() {
         }
 
     private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-            Unit
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                showNotificationPermissionSettingsDialog()
+            }
         }
 
     private val addStorageRootLauncher =
@@ -1123,8 +1128,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Запрашивает право показывать approval-уведомления на Android 13+.
-     * Без этого background approval может быть полностью скрыт системой.
+     * Запрашивает право показывать approval-уведомления на Android 13+ после показа Activity.
+     * Один системный prompt запускается за текущий жизненный цикл Activity; при отказе пользователь
+     * получает явный переход в настройки уведомлений приложения.
      */
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
@@ -1133,7 +1139,34 @@ class MainActivity : AppCompatActivity() {
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
             return
         }
+        if (notificationPermissionRequestedThisRun) {
+            return
+        }
+
+        notificationPermissionRequestedThisRun = true
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    /**
+     * Показывает fallback для прошивок, которые не дают повторный runtime prompt,
+     * и открывает системный экран уведомлений именно для DROPME.
+     */
+    private fun showNotificationPermissionSettingsDialog() {
+        if (isFinishing || isDestroyed) {
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.notification_permission_title)
+            .setMessage(R.string.notification_permission_message)
+            .setPositiveButton(R.string.notification_permission_open_settings) { _, _ ->
+                startActivity(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+                )
+            }
+            .setNegativeButton(R.string.notification_permission_not_now, null)
+            .show()
     }
 
     private fun restartDeviceServiceIfEnabled() {
