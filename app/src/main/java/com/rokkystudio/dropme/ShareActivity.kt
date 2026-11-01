@@ -118,6 +118,7 @@ class ShareActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_share)
+        applySystemBarInsets(findViewById(R.id.shareRoot))
 
         bindViews()
         bindDependencies()

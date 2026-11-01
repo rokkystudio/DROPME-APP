@@ -56,6 +56,7 @@ class RemoteFilesActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_remote_files)
+        applySystemBarInsets(findViewById(R.id.remoteFilesRoot))
         bindViews()
         wifiNetworkProvider = WifiNetworkProvider(applicationContext)
         remoteFileClient = RemoteFileClient(applicationContext)

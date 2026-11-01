@@ -64,6 +64,7 @@ class LocalFilesActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_remote_files)
+        applySystemBarInsets(findViewById(R.id.remoteFilesRoot))
 
         storageRootsRepository = StorageRootsRepository(applicationContext)
         bindViews()
