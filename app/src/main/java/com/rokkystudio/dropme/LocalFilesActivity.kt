@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import badfox.logic.neoui.NeoIconActionView
 import badfox.logic.neoui.NeoThemeMode
 import badfox.logic.neoui.NeoTopBarView
+import badfox.logic.neoui.applyNeoSystemBarInsets
 import badfox.logic.neoui.NeoUiSettings
 import com.rokkystudio.dropme.storage.StorageRootEntry
 import com.rokkystudio.dropme.storage.StorageRootsRepository
@@ -64,7 +65,7 @@ class LocalFilesActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_remote_files)
-        applySystemBarInsets(findViewById(R.id.remoteFilesRoot))
+        applyNeoSystemBarInsets(findViewById(R.id.remoteFilesRoot))
 
         storageRootsRepository = StorageRootsRepository(applicationContext)
         bindViews()

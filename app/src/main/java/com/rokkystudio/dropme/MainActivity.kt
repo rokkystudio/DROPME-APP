@@ -30,6 +30,7 @@ import badfox.logic.icons.MaterialSymbols
 import badfox.logic.neoui.NeoScreenItem
 import badfox.logic.neoui.NeoScreenNavigatorView
 import badfox.logic.neoui.NeoTopBarView
+import badfox.logic.neoui.applyNeoSystemBarInsets
 import badfox.logic.neoui.NeoThemeMode
 import badfox.logic.neoui.NeoUiSettings
 import com.rokkystudio.dropme.device.DeviceIdentityStore
@@ -172,7 +173,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        applySystemBarInsets(findViewById(R.id.mainRoot))
+        applyNeoSystemBarInsets(findViewById(R.id.mainRoot))
 
         bindViews()
         bindDependencies()

@@ -28,6 +28,7 @@ import com.rokkystudio.dropme.storage.SharedFileReader
 import com.rokkystudio.dropme.ui.ShareServerPickerScreen
 import badfox.logic.neoui.NeoButtonView
 import badfox.logic.neoui.NeoTopBarView
+import badfox.logic.neoui.applyNeoSystemBarInsets
 import badfox.logic.neoui.NeoThemeMode
 import badfox.logic.neoui.NeoUiSettings
 import java.util.concurrent.ExecutorService
@@ -118,7 +119,7 @@ class ShareActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_share)
-        applySystemBarInsets(findViewById(R.id.shareRoot))
+        applyNeoSystemBarInsets(findViewById(R.id.shareRoot))
 
         bindViews()
         bindDependencies()
