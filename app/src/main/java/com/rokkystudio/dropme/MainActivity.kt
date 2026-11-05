@@ -3,6 +3,8 @@ package com.rokkystudio.dropme
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -99,6 +101,12 @@ class MainActivity : AppCompatActivity() {
     private var discoveredDevices: List<WindowsServer> = emptyList()
     private var lastStorageRoots: List<StorageRootEntry> = emptyList()
     private var localIp: String = ""
+    private var localNetwork: Network? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var scanAfterNetworkChange = false
+
+    @Volatile
+    private var networkRevision = 0
     private var selectedScreen = MainScreen.DEVICE
     private var connectionMode = ConnectionMode.DEVICE_LIST
     private var currentLocalStorageRoot: StorageRootEntry? = null
@@ -190,6 +198,13 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         activityStarted = true
+        networkCallback = wifiNetworkProvider.registerNetworkChanges {
+            runOnUiThread {
+                if (activityStarted) {
+                    refreshLocalIp()
+                }
+            }
+        }
         window.decorView.post { requestNotificationPermissionIfNeeded() }
         renderLocalIdentity()
         renderIncomingFilesSettings()
@@ -210,6 +225,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         activityStarted = false
+        networkCallback?.let(wifiNetworkProvider::unregisterNetworkChanges)
+        networkCallback = null
         scanHandler.removeCallbacks(nextScanRunnable)
         super.onStop()
     }
@@ -404,6 +421,9 @@ class MainActivity : AppCompatActivity() {
         neoUiSettings.bindTopBar(neoTopBar)
     }
 
+    /**
+     * Показывает сохранённую identity устройства и актуальный IP выбранной Wi-Fi сети.
+     */
     private fun renderLocalIdentity() {
         val identity = identityStore.getIdentity()
         if (!deviceNameEdit.hasFocus()) {
@@ -413,17 +433,34 @@ class MainActivity : AppCompatActivity() {
         deviceServiceCheckBox.isChecked = identityStore.isDeviceServiceEnabled()
         updateSaveDeviceNameVisibility()
 
-        executor.execute {
-            val ip = runCatching {
-                wifiNetworkProvider.getWifiNetworkInfo().ipv4Address.hostAddress.orEmpty()
-            }.getOrDefault("")
-            runOnUiThread {
-                localIp = ip
-                deviceIpText.text = getString(
-                    R.string.main_device_ip,
-                    ip.ifBlank { getString(R.string.main_device_ip_unavailable) },
-                )
-                renderDeviceList()
+        refreshLocalIp()
+    }
+
+    /**
+     * Считывает доступный LAN IPv4, обновляет экран и запускает новый scan при смене интерфейса.
+     */
+    private fun refreshLocalIp() {
+        val wifiInfo = wifiNetworkProvider.findWifiNetworkInfo()
+        val ip = wifiInfo?.ipv4Address?.hostAddress.orEmpty()
+        val networkChanged = localNetwork != wifiInfo?.network || localIp != ip
+        localNetwork = wifiInfo?.network
+        localIp = ip
+        deviceIpText.text = getString(
+            R.string.main_device_ip,
+            ip.ifBlank { getString(R.string.main_device_ip_unavailable) },
+        )
+        renderDeviceList()
+
+        if (networkChanged) {
+            networkRevision++
+            if (activityStarted && selectedScreen == MainScreen.CONNECTION &&
+                connectionMode == ConnectionMode.DEVICE_LIST) {
+                scanHandler.removeCallbacks(nextScanRunnable)
+                if (scanInProgress) {
+                    scanAfterNetworkChange = true
+                } else {
+                    startNetworkScan()
+                }
             }
         }
     }
@@ -442,12 +479,16 @@ class MainActivity : AppCompatActivity() {
         startNetworkScan()
     }
 
+    /**
+     * Сканирует устройства в текущей сети и отменяет устаревшие результаты при смене интерфейса.
+     */
     private fun startNetworkScan() {
         if (!activityStarted || selectedScreen != MainScreen.CONNECTION || connectionMode != ConnectionMode.DEVICE_LIST || scanInProgress) {
             return
         }
 
         scanInProgress = true
+        val scanNetworkRevision = networkRevision
         val startedAt = SystemClock.elapsedRealtime()
         progressBar.visibility = View.VISIBLE
 
@@ -456,19 +497,19 @@ class MainActivity : AppCompatActivity() {
             try {
                 val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
                 runOnUiThread {
-                    localIp = wifiInfo.ipv4Address.hostAddress.orEmpty()
-                    deviceIpText.text = getString(
-                        R.string.main_device_ip,
-                        localIp,
-                    )
-                    renderDeviceList()
+                    if (scanNetworkRevision == networkRevision) {
+                        localNetwork = wifiInfo.network
+                        localIp = wifiInfo.ipv4Address.hostAddress.orEmpty()
+                        deviceIpText.text = getString(R.string.main_device_ip, localIp)
+                        renderDeviceList()
+                    }
                 }
 
                 val devices = deviceScanner.scan(
                     wifiInfo = wifiInfo,
                     onServerFound = { foundDevices ->
                         runOnUiThread {
-                            if (activityStarted) {
+                            if (activityStarted && scanNetworkRevision == networkRevision) {
                                 mergeDiscoveredDevices(foundDevices)
                             }
                         }
@@ -478,7 +519,8 @@ class MainActivity : AppCompatActivity() {
                             activityStarted &&
                                 selectedScreen == MainScreen.CONNECTION &&
                                 connectionMode == ConnectionMode.DEVICE_LIST &&
-                                !Thread.currentThread().isInterrupted
+                                !Thread.currentThread().isInterrupted &&
+                                scanNetworkRevision == networkRevision
                         if (!shouldContinue) {
                             scanCanceled.set(true)
                         }
@@ -488,7 +530,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (!scanCanceled.get()) {
                     runOnUiThread {
-                        if (activityStarted) {
+                        if (activityStarted && scanNetworkRevision == networkRevision) {
                             replaceDiscoveredDevices(devices)
                         }
                     }
@@ -499,8 +541,13 @@ class MainActivity : AppCompatActivity() {
             } finally {
                 scanInProgress = false
                 val elapsed = SystemClock.elapsedRealtime() - startedAt
-                val delay = (SCAN_INTERVAL_MS - elapsed).coerceAtLeast(0L)
                 runOnUiThread {
+                    val delay = if (scanAfterNetworkChange || scanNetworkRevision != networkRevision) {
+                        0L
+                    } else {
+                        (SCAN_INTERVAL_MS - elapsed).coerceAtLeast(0L)
+                    }
+                    scanAfterNetworkChange = false
                     progressBar.visibility = View.GONE
                     if (activityStarted && selectedScreen == MainScreen.CONNECTION && connectionMode == ConnectionMode.DEVICE_LIST) {
                         scanHandler.removeCallbacks(nextScanRunnable)

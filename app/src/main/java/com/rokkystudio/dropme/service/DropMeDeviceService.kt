@@ -8,8 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -32,12 +36,30 @@ import java.util.concurrent.Executors
  */
 class DropMeDeviceService : Service() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val serverLock = Any()
+    private val networkHandler = Handler(Looper.getMainLooper())
+    private val networkSyncRunnable = Runnable {
+        if (running && identityStore.isDeviceServiceEnabled()) {
+            executor.execute {
+                synchronized(serverLock) {
+                    if (running && identityStore.isDeviceServiceEnabled()) {
+                        reconcileNetwork()
+                    }
+                }
+            }
+        }
+    }
+
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private lateinit var identityStore: DeviceIdentityStore
     private lateinit var wifiNetworkProvider: WifiNetworkProvider
     private lateinit var storageRootsRepository: StorageRootsRepository
     private lateinit var deviceServer: AndroidDeviceServer
     private lateinit var webDavServer: AndroidWebDavServer
+
+    @Volatile
+    private var activeNetwork: Network? = null
 
     @Volatile
     private var activeHost: String = ""
@@ -68,6 +90,7 @@ class DropMeDeviceService : Service() {
 
         if (intent?.action == ACTION_STOP) {
             identityStore.setDeviceServiceEnabled(false)
+            stopNetworkMonitoring()
             stopServers()
             stopForegroundCompat()
             stopSelf()
@@ -76,6 +99,7 @@ class DropMeDeviceService : Service() {
         }
 
         if (!identityStore.isDeviceServiceEnabled()) {
+            stopNetworkMonitoring()
             stopServers()
             stopForegroundCompat()
             stopSelf()
@@ -84,24 +108,76 @@ class DropMeDeviceService : Service() {
         }
 
         startForegroundCompat(buildNotification(getString(R.string.device_service_starting)))
-        executor.execute {
-            restartServers()
-        }
+        startNetworkMonitoring()
+        requestNetworkSync()
         return START_STICKY
     }
 
     override fun onDestroy() {
         running = false
+        stopNetworkMonitoring()
         stopServers()
         executor.shutdownNow()
         broadcastState()
         super.onDestroy()
     }
 
-    private fun restartServers() {
+    /**
+     * Подписывает работающий сервис на изменения Wi-Fi интерфейсов и адресов.
+     */
+    private fun startNetworkMonitoring() {
+        if (networkCallback != null) {
+            return
+        }
+        networkCallback = wifiNetworkProvider.registerNetworkChanges(::requestNetworkSync)
+    }
+
+    /**
+     * Освобождает сетевой callback и отменяет запланированные проверки сети.
+     */
+    private fun stopNetworkMonitoring() {
+        networkHandler.removeCallbacks(networkSyncRunnable)
+        networkCallback?.let(wifiNetworkProvider::unregisterNetworkChanges)
+        networkCallback = null
+    }
+
+    /**
+     * Планирует немедленное согласование сокетов с текущей Wi-Fi сетью.
+     */
+    private fun requestNetworkSync() {
+        networkHandler.removeCallbacks(networkSyncRunnable)
+        networkHandler.post(networkSyncRunnable)
+    }
+
+    /**
+     * Сопоставляет работающие серверы с актуальной Wi-Fi сетью и IPv4.
+     * Без назначенного IP закрывает сокеты и продолжает ожидать сетевых событий.
+     */
+    private fun reconcileNetwork() {
+        val wifiInfo = wifiNetworkProvider.findWifiNetworkInfo()
+        if (wifiInfo == null) {
+            if (activeNetwork != null || activeHost.isNotBlank()) {
+                stopServers()
+            }
+            updateNotification(getString(R.string.device_service_starting))
+            broadcastState()
+            return
+        }
+
+        val host = wifiInfo.ipv4Address.hostAddress.orEmpty()
+        if (activeNetwork == wifiInfo.network && activeHost == host) {
+            return
+        }
+        restartServers(wifiInfo)
+    }
+
+    /**
+     * Привязывает control и файловый endpoint к IPv4 выбранного интерфейса.
+     * Ошибка запуска освобождает сокеты и запускает следующую попытку через интервал.
+     */
+    private fun restartServers(wifiInfo: WifiNetworkProvider.WifiNetworkInfo) {
         stopServers()
         try {
-            val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
             val identity = identityStore.getIdentity()
             val roots = storageRootsRepository.listPublishedRoots()
 
@@ -118,13 +194,15 @@ class DropMeDeviceService : Service() {
                 null
             }
 
-            activeHost = wifiInfo.ipv4Address.hostAddress.orEmpty()
-            activeFilePort = runningWebDav?.port ?: 0
+            val filePort = runningWebDav?.port ?: 0
             deviceServer.start(
                 wifiInfo = wifiInfo,
                 identity = identity,
-                filePort = activeFilePort,
+                filePort = filePort,
             )
+            activeNetwork = wifiInfo.network
+            activeHost = wifiInfo.ipv4Address.hostAddress.orEmpty()
+            activeFilePort = filePort
 
             val text = if (activeFilePort > 0) {
                 getString(
@@ -143,10 +221,12 @@ class DropMeDeviceService : Service() {
             broadcastState()
         } catch (throwable: Throwable) {
             Log.e(LOG_TAG, "Device service failed to start", throwable)
-            activeHost = ""
-            activeFilePort = 0
+            stopServers()
             updateNotification(getString(R.string.device_service_error))
             broadcastState()
+            if (running && identityStore.isDeviceServiceEnabled()) {
+                networkHandler.postDelayed(networkSyncRunnable, NETWORK_RETRY_DELAY_MS)
+            }
         }
     }
 
@@ -155,46 +235,62 @@ class DropMeDeviceService : Service() {
      * когда файловый сервер уже работает.
      */
     private fun refreshPublishedStorage() {
-        if (!identityStore.isDeviceServiceEnabled() || activeHost.isBlank()) {
-            return
-        }
-
-        try {
-            val roots = storageRootsRepository.listPublishedRoots()
-            if (activeFilePort > 0 && roots.isNotEmpty()) {
-                webDavServer.updateRoots(roots)
+        synchronized(serverLock) {
+            if (!identityStore.isDeviceServiceEnabled() || activeHost.isBlank()) {
                 return
             }
 
-            val wifiInfo = wifiNetworkProvider.getWifiNetworkInfo()
-            val identity = identityStore.getIdentity()
-            if (roots.isEmpty()) {
-                webDavServer.stop()
-                activeFilePort = 0
-            } else {
-                activeFilePort = webDavServer.start(
-                    wifiInfo = wifiInfo,
-                    roots = roots,
-                ).port
-            }
+            try {
+                val wifiInfo = wifiNetworkProvider.findWifiNetworkInfo()
+                if (wifiInfo == null || wifiInfo.network != activeNetwork ||
+                    wifiInfo.ipv4Address.hostAddress != activeHost) {
+                    requestNetworkSync()
+                    return
+                }
 
-            deviceServer.stop()
-            deviceServer.start(
-                wifiInfo = wifiInfo,
-                identity = identity,
-                filePort = activeFilePort,
-            )
-            broadcastState()
-        } catch (throwable: Throwable) {
-            Log.w(LOG_TAG, "Published storage refresh failed", throwable)
+                val roots = storageRootsRepository.listPublishedRoots()
+                if (activeFilePort > 0 && roots.isNotEmpty()) {
+                    webDavServer.updateRoots(roots)
+                    return
+                }
+
+                val identity = identityStore.getIdentity()
+                if (roots.isEmpty()) {
+                    webDavServer.stop()
+                    activeFilePort = 0
+                } else {
+                    activeFilePort = webDavServer.start(
+                        wifiInfo = wifiInfo,
+                        roots = roots,
+                    ).port
+                }
+
+                deviceServer.stop()
+                deviceServer.start(
+                    wifiInfo = wifiInfo,
+                    identity = identity,
+                    filePort = activeFilePort,
+                )
+                broadcastState()
+            } catch (throwable: Throwable) {
+                Log.w(LOG_TAG, "Published storage refresh failed", throwable)
+                stopServers()
+                requestNetworkSync()
+            }
         }
     }
 
+    /**
+     * Закрывает control и WebDAV сокеты и очищает сетевую identity работающего endpoint.
+     */
     private fun stopServers() {
-        deviceServer.stop()
-        webDavServer.stop()
-        activeHost = ""
-        activeFilePort = 0
+        synchronized(serverLock) {
+            deviceServer.stop()
+            webDavServer.stop()
+            activeNetwork = null
+            activeHost = ""
+            activeFilePort = 0
+        }
     }
 
     private fun buildNotification(text: String): Notification {
@@ -310,6 +406,7 @@ class DropMeDeviceService : Service() {
         private const val REQUEST_OPEN_APP = 4302
         private const val REQUEST_STOP_SERVICE = 4303
         private const val LOG_TAG = "DROPME"
+        private const val NETWORK_RETRY_DELAY_MS = 2_000L
 
         fun isRunning(): Boolean = running
 

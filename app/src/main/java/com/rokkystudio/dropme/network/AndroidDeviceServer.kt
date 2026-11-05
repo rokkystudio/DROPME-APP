@@ -63,6 +63,9 @@ class AndroidDeviceServer {
     @Volatile
     private var filePort: Int = 0
 
+    /**
+     * Запускает control endpoint на текущем Wi-Fi IPv4 и освобождает socket при ошибке привязки.
+     */
     fun start(
         wifiInfo: WifiNetworkProvider.WifiNetworkInfo,
         identity: DeviceIdentityStore.DeviceIdentity,
@@ -71,8 +74,13 @@ class AndroidDeviceServer {
         stop()
 
         val socket = ServerSocket()
-        socket.reuseAddress = true
-        socket.bind(InetSocketAddress(wifiInfo.ipv4Address as Inet4Address, CONTROL_PORT))
+        try {
+            socket.reuseAddress = true
+            socket.bind(InetSocketAddress(wifiInfo.ipv4Address as Inet4Address, CONTROL_PORT))
+        } catch (throwable: Throwable) {
+            socket.close()
+            throw throwable
+        }
 
         this.identity = identity
         this.filePort = filePort

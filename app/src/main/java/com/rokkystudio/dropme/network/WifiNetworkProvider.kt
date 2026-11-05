@@ -7,9 +7,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiManager
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import com.rokkystudio.dropme.AppError
 import com.rokkystudio.dropme.asAppException
@@ -20,8 +17,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * РџСЂРµРґРѕСЃС‚Р°РІР»СЏРµС‚ СЃРІРµРґРµРЅРёСЏ Рѕ WiвЂ‘Fi СЃРµС‚Рё, С‡РµСЂРµР· РєРѕС‚РѕСЂСѓСЋ РІС‹РїРѕР»РЅСЏСЋС‚СЃСЏ
- * Р»РѕРєР°Р»СЊРЅС‹Рµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ DROPME.
+ * Предоставляет адрес и сетевой маршрут Wi-Fi для локального взаимодействия устройств DROPME.
+ * Отслеживает появление, потерю и изменение IP-адресов независимо от сети по умолчанию.
  */
 class WifiNetworkProvider(
     context: Context,
@@ -30,7 +27,7 @@ class WifiNetworkProvider(
     private val wifiManager = context.applicationContext.getSystemService(WifiManager::class.java)
 
     /**
-     * РЎРѕРґРµСЂР¶РёС‚ РїСЂРёРІСЏР·РєСѓ Рє WiвЂ‘Fi СЃРµС‚Рё Рё IPv4-Р°РґСЂРµСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР° РІ СЌС‚РѕР№ СЃРµС‚Рё.
+     * Содержит Android Network, назначенный IPv4 и длину префикса локальной Wi-Fi подсети.
      */
     data class WifiNetworkInfo(
         val network: Network,
@@ -44,25 +41,67 @@ class WifiNetworkProvider(
     )
 
     /**
-     * Р’РѕР·РІСЂР°С‰Р°РµС‚ Р°РєС‚РёРІРЅСѓСЋ WiвЂ‘Fi СЃРµС‚СЊ Рё IPv4-Р°РґСЂРµСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР°.
+     * Возвращает готовую Wi-Fi сеть или кратковременно ожидает назначение IPv4.
      */
     fun getWifiNetworkInfo(): WifiNetworkInfo {
-        return findWifiNetworkInfo() ?: throw AppError.NoWifiNetwork.asAppException()
+        return findWifiNetworkInfo() ?: awaitWifiNetworkInfo()
+            ?: throw AppError.NoWifiNetwork.asAppException()
     }
 
     /**
-     * Ищет активную Wi‑Fi сеть, доступную для локальных подключений, и ожидает callback сети при отсутствии готовых данных.
+     * Возвращает доступную Wi-Fi сеть с LAN IPv4 независимо от default network Android.
+     * При отсутствии настроенного адреса возвращает null без ожидания.
      */
-    private fun findWifiNetworkInfo(): WifiNetworkInfo? {
-        connectivityManager.activeNetwork
-            ?.let(::buildWifiNetworkInfo)
-            ?.let { return it }
+    fun findWifiNetworkInfo(): WifiNetworkInfo? {
+        val activeNetwork = connectivityManager.activeNetwork
+        activeNetwork?.let(::buildWifiNetworkInfo)?.let { return it }
 
-        return awaitWifiNetworkInfo()
+        for (network in connectivityManager.allNetworks) {
+            if (network != activeNetwork) {
+                buildWifiNetworkInfo(network)?.let { return it }
+            }
+        }
+        return null
     }
 
     /**
-     * РЎРѕР±РёСЂР°РµС‚ РґР°РЅРЅС‹Рµ Рѕ WiвЂ‘Fi СЃРµС‚Рё Рё РѕС‚Р±СЂР°СЃС‹РІР°РµС‚ РІР°СЂРёР°РЅС‚С‹ Р±РµР· РїСЂРёРіРѕРґРЅРѕРіРѕ LAN IPv4.
+     * Регистрирует длительное наблюдение за Wi-Fi интерфейсами, их адресами и параметрами.
+     * Возвращённый callback освобождается через unregisterNetworkChanges.
+     */
+    fun registerNetworkChanges(onChanged: () -> Unit): ConnectivityManager.NetworkCallback {
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .build()
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                onChanged()
+            }
+
+            override fun onLost(network: Network) {
+                onChanged()
+            }
+
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                onChanged()
+            }
+
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
+                onChanged()
+            }
+        }
+        registerWifiCallback(request, callback)
+        return callback
+    }
+
+    /**
+     * Отменяет наблюдение за Wi-Fi интерфейсами для указанного callback.
+     */
+    fun unregisterNetworkChanges(callback: ConnectivityManager.NetworkCallback) {
+        connectivityManager.unregisterNetworkCallback(callback)
+    }
+
+    /**
+     * Создаёт сведения о Wi-Fi маршруте только при наличии пригодного LAN IPv4 и префикса.
      */
     private fun buildWifiNetworkInfo(network: Network): WifiNetworkInfo? {
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return null
@@ -92,7 +131,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Р§РёС‚Р°РµС‚ IPv4 Рё РјР°СЃРєСѓ РёРјРµРЅРЅРѕ WiвЂ‘Fi DHCP, С‡С‚РѕР±С‹ РЅРµ Р±СЂР°С‚СЊ С‚СѓРЅРЅРµР»СЊРЅС‹Р№ VPN Р°РґСЂРµСЃ.
+     * Читает IPv4 и маску из Wi-Fi DHCP, не используя адреса VPN-интерфейсов.
      */
     @Suppress("DEPRECATION")
     private fun getWifiDhcpInfo(): DhcpWifiInfo? {
@@ -113,23 +152,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * РћС‚РґР°С‘С‚ РїСЂРёРѕСЂРёС‚РµС‚ Р»РѕРєР°Р»СЊРЅС‹Рј Р°РґСЂРµСЃР°Рј WiвЂ‘Fi РїРµСЂРµРґ VPN РґРёР°РїР°Р·РѕРЅР°РјРё.
-     */
-    private fun scoreNetworkInfo(info: WifiNetworkInfo): Int {
-        val raw = info.ipv4Address.address
-        val firstOctet = raw[0].toInt() and 0xFF
-        val secondOctet = raw[1].toInt() and 0xFF
-        return when {
-            firstOctet == 192 && secondOctet == 168 -> 4
-            firstOctet == 10 -> 3
-            firstOctet == 172 && secondOctet in 16..31 -> 2
-            info.ipv4Address.isSiteLocalAddress -> 1
-            else -> 1
-        }
-    }
-
-    /**
-     * РћР¶РёРґР°РµС‚ РґРѕСЃС‚СѓРїРЅСѓСЋ WiвЂ‘Fi СЃРµС‚СЊ С‡РµСЂРµР· Р°РєС‚СѓР°Р»СЊРЅС‹Р№ callback API ConnectivityManager.
+     * Ожидает назначение IPv4 через callbacks доступности и настройки Wi-Fi сети.
      */
     private fun awaitWifiNetworkInfo(): WifiNetworkInfo? {
         val selectedNetwork = AtomicReference<WifiNetworkInfo?>()
@@ -138,15 +161,22 @@ class WifiNetworkProvider(
             .build()
         val latch = CountDownLatch(1)
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
+            private fun checkNetwork(network: Network) {
                 val wifiInfo = buildWifiNetworkInfo(network) ?: return
-                val current = selectedNetwork.get()
-                if (current == null || scoreNetworkInfo(wifiInfo) > scoreNetworkInfo(current)) {
-                    selectedNetwork.set(wifiInfo)
-                }
-                if (scoreNetworkInfo(wifiInfo) >= PREFERRED_WIFI_SCORE) {
-                    latch.countDown()
-                }
+                selectedNetwork.set(wifiInfo)
+                latch.countDown()
+            }
+
+            override fun onAvailable(network: Network) {
+                checkNetwork(network)
+            }
+
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                checkNetwork(network)
+            }
+
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
+                checkNetwork(network)
             }
 
             override fun onUnavailable() {
@@ -156,22 +186,22 @@ class WifiNetworkProvider(
 
         registerWifiCallback(request, callback)
         return try {
+            findWifiNetworkInfo()?.let { return it }
             latch.await(WIFI_CALLBACK_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            selectedNetwork.get()
+            findWifiNetworkInfo() ?: selectedNetwork.get()
         } finally {
-            runCatching {
-                connectivityManager.unregisterNetworkCallback(callback)
-            }
+            unregisterNetworkChanges(callback)
         }
     }
 
     /**
-     * РќР°С…РѕРґРёС‚ IPv4-Р°РґСЂРµСЃ СѓСЃС‚СЂРѕР№СЃС‚РІР° РІ СЃРІРѕР№СЃС‚РІР°С… WiвЂ‘Fi СЃРµС‚Рё.
+     * Возвращает пригодный IPv4 из LinkProperties или сетевого интерфейса Android.
      */
     private fun findIpv4Address(linkProperties: LinkProperties): Inet4Address? {
         linkProperties.linkAddresses
             .map { it.address }
             .filterIsInstance<Inet4Address>()
+            .filter { scoreIpv4Address(it) > 0 }
             .sortedByDescending(::scoreIpv4Address)
             .firstOrNull()
             ?.let { return it }
@@ -181,12 +211,13 @@ class WifiNetworkProvider(
         return networkInterface.inetAddresses
             .toList()
             .filterIsInstance<Inet4Address>()
+            .filter { scoreIpv4Address(it) > 0 }
             .sortedByDescending(::scoreIpv4Address)
             .firstOrNull()
     }
 
     /**
-     * РџРѕРґРЅРёРјР°РµС‚ РЅР°РІРµСЂС… С‚РёРїРёС‡РЅС‹Р№ LAN IPv4 Рё РѕРїСѓСЃРєР°РµС‚ Р°РґСЂРµСЃР° VPN/СЃР»СѓР¶РµР±РЅС‹С… РґРёР°РїР°Р·РѕРЅРѕРІ.
+     * Приоритизирует локальные IPv4, исключая loopback и link-local адреса.
      */
     private fun scoreIpv4Address(address: Inet4Address): Int {
         val raw = address.address
@@ -201,7 +232,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * РџСЂРµРѕР±СЂР°Р·СѓРµС‚ little-endian int РёР· Android WiвЂ‘Fi API РІ Inet4Address.
+     * Преобразует little-endian адрес Android DHCP в Inet4Address.
      */
     private fun Int.toInet4AddressLittleEndian(): Inet4Address? {
         val bytes = byteArrayOf(
@@ -216,14 +247,14 @@ class WifiNetworkProvider(
     }
 
     /**
-     * РЎС‡РёС‚Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ РµРґРёРЅРёС† РІ РјР°СЃРєРµ РїРѕРґСЃРµС‚Рё.
+     * Возвращает количество установленных битов IPv4 маски.
      */
     private fun Int.countMaskBits(): Int {
         return Integer.bitCount(this)
     }
 
     /**
-     * РќР°С…РѕРґРёС‚ РґР»РёРЅСѓ РїСЂРµС„РёРєСЃР° РґР»СЏ IPv4-Р°РґСЂРµСЃР° WiвЂ‘Fi СЃРµС‚Рё.
+     * Находит префикс для указанного IPv4 в LinkProperties сети.
      */
     private fun findPrefixLength(linkProperties: LinkProperties, ipv4Address: Inet4Address): Int? {
         return linkProperties.linkAddresses
@@ -232,7 +263,7 @@ class WifiNetworkProvider(
     }
 
     /**
-     * РџСЂРѕРІРµСЂСЏРµС‚ РЅР°Р»РёС‡РёРµ WiвЂ‘Fi С‚СЂР°РЅСЃРїРѕСЂС‚Р° Сѓ СЃРµС‚Рё Android.
+     * Проверяет наличие Wi-Fi транспорта без VPN у сети Android.
      */
     private fun NetworkCapabilities.isUsableWifiNetwork(): Boolean {
         return hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
@@ -240,27 +271,18 @@ class WifiNetworkProvider(
     }
 
     /**
-     * Р РµРіРёСЃС‚СЂРёСЂСѓРµС‚ callback РїРѕРёСЃРєР° WiвЂ‘Fi СЃРµС‚Рё С‡РµСЂРµР· РґРѕСЃС‚СѓРїРЅС‹Р№ API СѓСЂРѕРІРЅСЏ SDK.
+     * Подписывает callback на все Wi-Fi сети, включая не выбранные системой по умолчанию.
      */
     private fun registerWifiCallback(
         request: NetworkRequest,
         callback: ConnectivityManager.NetworkCallback,
     ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            connectivityManager.registerBestMatchingNetworkCallback(
-                request,
-                callback,
-                Handler(Looper.getMainLooper()),
-            )
-        } else {
-            connectivityManager.registerNetworkCallback(request, callback)
-        }
+        connectivityManager.registerNetworkCallback(request, callback)
     }
 
     private companion object {
         const val LOG_TAG = "DROPME"
         const val WIFI_CALLBACK_TIMEOUT_MS = 750L
-        const val PREFERRED_WIFI_SCORE = 3
     }
 }
 
