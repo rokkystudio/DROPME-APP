@@ -46,6 +46,15 @@
             android:exported="false" />
 
         <activity
+            android:name=".IncomingTransferActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DropMe" />
+
+        <receiver
+            android:name=".network.IncomingTransferActionReceiver"
+            android:exported="false" />
+
+        <activity
             android:name=".RemoteFilesActivity"
             android:exported="false"
             android:theme="@style/Theme.DropMe" />

@@ -1,18 +1,8 @@
 package com.rokkystudio.dropme.network
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
-import android.text.format.Formatter
 import android.util.Log
-import android.widget.Toast
-import androidx.core.app.NotificationCompat
-import com.rokkystudio.dropme.R
 import com.rokkystudio.dropme.device.DeviceIdentityStore
 import com.rokkystudio.dropme.device.DeviceTrustStore
 import com.rokkystudio.dropme.device.DeviceSessionRegistry
@@ -97,6 +87,7 @@ class AndroidDeviceServer {
     }
 
     fun stop() {
+        IncomingTransferCoordinator.cancelAll(AppContextHolder.context)
         if (!running.getAndSet(false)) {
             return
         }
@@ -149,7 +140,7 @@ class AndroidDeviceServer {
 
                 request.method == "PUT" &&
                     (request.path == "/dropme/upload" || request.path == "/wifidrop/upload") -> {
-                    handleUpload(output, input, request, remoteIp)
+                    handleUpload(client, output, input, request, remoteIp)
                 }
 
                 else -> {
@@ -225,7 +216,14 @@ class AndroidDeviceServer {
         )
     }
 
+    /**
+     * Принимает один авторизованный файл, проверяет SHA-256 и публикует результат.
+     *
+     * Передача связана с отдельным уведомлением; отмена закрывает клиентский сокет,
+     * удаляет временный файл и не сохраняет частичный результат.
+     */
     private fun handleUpload(
+        client: Socket,
         output: BufferedOutputStream,
         input: BufferedInputStream,
         request: Request,
@@ -258,23 +256,30 @@ class AndroidDeviceServer {
             return
         }
 
+        val context = AppContextHolder.context
+        val transfer = IncomingTransferCoordinator.begin(
+            context = context,
+            socket = client,
+            fileName = fileName,
+            senderName = requester.name,
+            totalBytes = request.contentLength,
+        )
         val target = uniqueTarget(incomingDirectory, fileName)
         val temporary = File(incomingDirectory, ".${target.name}.${System.nanoTime()}.tmp")
         val digest = MessageDigest.getInstance("SHA-256")
         var remaining = request.contentLength
         var receivedBytes = 0L
         var lastProgressPercent = -1
+        var targetCreated = false
+        var completed = false
 
         try {
-            reportIncomingProgress(
-                fileName = fileName,
-                senderName = requester.name,
-                receivedBytes = 0L,
-                totalBytes = request.contentLength,
-            )
             FileOutputStream(temporary).buffered().use { fileOutput ->
                 val buffer = ByteArray(64 * 1024)
                 while (remaining > 0L) {
+                    if (transfer.cancelled) {
+                        throw InterruptedException("Incoming transfer canceled")
+                    }
                     val read = input.read(
                         buffer,
                         0,
@@ -291,22 +296,22 @@ class AndroidDeviceServer {
                     remaining -= read.toLong()
                     receivedBytes += read.toLong()
                     val progressPercent = if (request.contentLength <= 0L) {
-                        100
+                        0
                     } else {
-                        ((receivedBytes * 100L) / request.contentLength).toInt().coerceIn(0, 100)
+                        ((receivedBytes * 100L) / request.contentLength).toInt().coerceIn(0, 99)
                     }
                     if (progressPercent != lastProgressPercent) {
                         lastProgressPercent = progressPercent
-                        reportIncomingProgress(
-                            fileName = fileName,
-                            senderName = requester.name,
-                            receivedBytes = receivedBytes,
-                            totalBytes = request.contentLength,
-                        )
+                        IncomingTransferCoordinator.progress(context, transfer, receivedBytes)
                     }
                 }
                 fileOutput.flush()
             }
+
+            if (transfer.cancelled) {
+                throw InterruptedException("Incoming transfer canceled")
+            }
+            IncomingTransferCoordinator.verifying(context, transfer)
 
             val sha256 = digest.digest().joinToString("") { byte ->
                 (byte.toInt() and 0xff).toString(16).padStart(2, '0')
@@ -315,46 +320,72 @@ class AndroidDeviceServer {
                 ?.trim()
                 ?.lowercase(Locale.US)
             if (expectedSha256 == null || !SHA256_PATTERN.matches(expectedSha256)) {
-                temporary.delete()
-                reportIncomingFailed(fileName)
+                IncomingTransferCoordinator.fail(context, transfer)
                 writeResponse(output, 400, "Bad Request", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
             if (expectedSha256 != sha256) {
-                temporary.delete()
-                reportIncomingFailed(fileName)
+                IncomingTransferCoordinator.fail(context, transfer)
                 writeResponse(output, 422, "Unprocessable Content", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
 
-            if (!temporary.renameTo(target)) {
-                temporary.copyTo(target, overwrite = false)
+            if (transfer.cancelled) {
+                throw InterruptedException("Incoming transfer canceled")
+            }
+            if (temporary.renameTo(target)) {
+                targetCreated = true
+            } else {
+                if (!target.createNewFile()) {
+                    throw IllegalStateException("Incoming filename already exists: ${target.name}")
+                }
+                targetCreated = true
+                FileInputStream(temporary).buffered().use { inputFile ->
+                    FileOutputStream(target).buffered().use { outputFile ->
+                        inputFile.copyTo(outputFile)
+                    }
+                }
                 temporary.delete()
             }
 
             val storedSha256 = computeFileSha256(target)
             if (storedSha256 != expectedSha256 || target.length() != request.contentLength) {
-                target.delete()
-                reportIncomingFailed(fileName)
+                IncomingTransferCoordinator.fail(context, transfer)
                 writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
                 return
             }
+
+            if (!IncomingTransferCoordinator.complete(context, transfer, target)) {
+                throw InterruptedException("Incoming transfer canceled")
+            }
+            completed = true
 
             val headers = linkedMapOf(
                 HEADER_LENGTH_RESPONSE to target.length().toString(),
                 HEADER_SHA256_RESPONSE to storedSha256,
             )
             writeResponse(output, 201, "Created", "application/json; charset=utf-8", ByteArray(0), headers)
-            reportIncomingCompleted(target)
             Log.d(
                 LOG_TAG,
                 "Incoming share saved: ${target.absolutePath} from ${requester.name} (${requester.id})",
             )
         } catch (throwable: Throwable) {
+            if (transfer.cancelled) {
+                Log.d(LOG_TAG, "Incoming share canceled: $fileName")
+            } else if (completed) {
+                Log.w(LOG_TAG, "Incoming share saved but HTTP response failed", throwable)
+            } else {
+                IncomingTransferCoordinator.fail(context, transfer)
+                Log.w(LOG_TAG, "Incoming share failed", throwable)
+                runCatching {
+                    writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
+                }
+            }
+        } finally {
             temporary.delete()
-            reportIncomingFailed(fileName)
-            Log.w(LOG_TAG, "Incoming share failed", throwable)
-            writeResponse(output, 500, "Internal Server Error", "text/plain; charset=utf-8", ByteArray(0))
+            if (targetCreated && !completed) {
+                target.delete()
+            }
         }
     }
 
@@ -517,104 +548,6 @@ class AndroidDeviceServer {
     /**
      * Вычисляет SHA-256 уже сохранённого файла для финальной проверки целостности.
      */
-    /** Показывает прогресс входящего файла в системном уведомлении. */
-    private fun reportIncomingProgress(
-        fileName: String,
-        senderName: String,
-        receivedBytes: Long,
-        totalBytes: Long,
-    ) {
-        val context = AppContextHolder.context
-        createIncomingTransferChannel(context)
-        val percent = if (totalBytes <= 0L) {
-            0
-        } else {
-            ((receivedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
-        }
-        val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setContentTitle(context.getString(R.string.incoming_transfer_title, fileName))
-            .setContentText(
-                context.getString(
-                    R.string.incoming_transfer_progress,
-                    senderName,
-                    percent,
-                    Formatter.formatShortFileSize(context, receivedBytes.coerceAtLeast(0L)),
-                    Formatter.formatShortFileSize(context, totalBytes.coerceAtLeast(0L)),
-                ),
-            )
-            .setProgress(100, percent, totalBytes <= 0L)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-        context.getSystemService(NotificationManager::class.java)
-            .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
-    }
-
-    /**
-     * Сообщает об успешном сохранении уже проверенного SHA-256 файла и публикует его
-     * в системном индексе общего хранилища, чтобы файловые менеджеры увидели файл сразу.
-     */
-    private fun reportIncomingCompleted(file: File) {
-        val context = AppContextHolder.context
-        createIncomingTransferChannel(context)
-        MediaScannerConnection.scanFile(
-            context,
-            arrayOf(file.absolutePath),
-            null,
-            null,
-        )
-        val title = context.getString(R.string.incoming_transfer_saved, file.name)
-        val folder = file.parentFile?.absolutePath.orEmpty()
-        val detail = context.getString(R.string.incoming_transfer_saved_detail, folder)
-        val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setContentTitle(title)
-            .setContentText(detail)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-        context.getSystemService(NotificationManager::class.java)
-            .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, "$title\n$detail", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun reportIncomingFailed(fileName: String) {
-        val context = AppContextHolder.context
-        createIncomingTransferChannel(context)
-        val text = context.getString(R.string.incoming_transfer_failed, fileName)
-        val notification = NotificationCompat.Builder(context, INCOMING_TRANSFER_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher_monochrome)
-            .setContentTitle(text)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .build()
-        context.getSystemService(NotificationManager::class.java)
-            .notify(INCOMING_TRANSFER_NOTIFICATION_ID, notification)
-    }
-
-    private fun createIncomingTransferChannel(context: android.content.Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return
-        }
-        val manager = context.getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(INCOMING_TRANSFER_CHANNEL_ID) != null) {
-            return
-        }
-        manager.createNotificationChannel(
-            NotificationChannel(
-                INCOMING_TRANSFER_CHANNEL_ID,
-                context.getString(R.string.incoming_transfer_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ).apply {
-                description = context.getString(R.string.incoming_transfer_channel_description)
-            },
-        )
-    }
 
     private fun computeFileSha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -694,8 +627,6 @@ class AndroidDeviceServer {
         private const val HEADER_SHA256 = "x-dropme-sha256"
         private const val HEADER_LENGTH_RESPONSE = "X-DROPME-Length"
         private const val HEADER_SHA256_RESPONSE = "X-DROPME-SHA256"
-        private const val INCOMING_TRANSFER_CHANNEL_ID = "dropme_incoming_transfers"
-        private const val INCOMING_TRANSFER_NOTIFICATION_ID = 5100
         private const val LOG_TAG = "DROPME"
         private val DEVICE_ID_PATTERN = Regex("^[0-9a-f]{32}$")
         private val SHA256_PATTERN = Regex("^[0-9a-f]{64}$")

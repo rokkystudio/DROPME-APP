@@ -1,6 +1,7 @@
 package com.rokkystudio.dropme
 
 import android.app.Application
+import android.app.NotificationManager
 import badfox.logic.neoui.NeoThemeMode
 import badfox.logic.neoui.NeoUiSettings
 import com.rokkystudio.dropme.device.DeviceIdentityStore
@@ -14,6 +15,7 @@ class DropMeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContextHolder.context = applicationContext
+        getSystemService(NotificationManager::class.java).cancel(5100)
         NeoUiSettings(
             context = this,
             preferencesName = NEO_UI_PREFERENCES_NAME,

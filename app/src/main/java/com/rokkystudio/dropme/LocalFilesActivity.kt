@@ -175,7 +175,26 @@ class LocalFilesActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Открывает папку, переданную экраном входящей передачи, внутри доступного
+     * локального хранилища или показывает список хранилищ.
+     */
     private fun openRoot() {
+        val requestedPath = intent.getStringExtra(EXTRA_OPEN_DIRECTORY)
+        if (requestedPath != null) {
+            val directory = File(requestedPath).canonicalFile
+            if (directory.isDirectory) {
+                val root = storageRootsRepository.listRoots().firstOrNull { entry ->
+                    val rootPath = entry.directPath ?: return@firstOrNull false
+                    directory.toPath().startsWith(File(rootPath).canonicalFile.toPath())
+                }
+                if (root != null) {
+                    currentStorageRoot = root
+                    openDirectory(directory)
+                    return
+                }
+            }
+        }
         showStorageRoots()
     }
 
@@ -316,6 +335,7 @@ class LocalFilesActivity : AppCompatActivity() {
     }
 
     companion object {
+        const val EXTRA_OPEN_DIRECTORY = "open_directory"
         private const val NEO_UI_PREFERENCES_NAME = "dropme_ui"
 
         fun createIntent(context: Context): Intent {

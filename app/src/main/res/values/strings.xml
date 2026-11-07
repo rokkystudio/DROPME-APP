@@ -200,4 +200,13 @@
     <string name="local_files_permission_message">To browse all files on this device, allow DROPME access to all files in Android settings.</string>
     <string name="local_files_permission_required">DROPME cannot browse local files until Android grants file access.</string>
     <string name="local_files_permission_grant">Grant access</string>
+    <string name="incoming_transfer_screen_title">Incoming transfer</string>
+    <string name="incoming_transfer_sender">From: %1$s</string>
+    <string name="incoming_transfer_percent">Receiving: %1$d%%</string>
+    <string name="incoming_transfer_bytes">%1$s / %2$s</string>
+    <string name="incoming_transfer_verifying">Verifying and saving file…</string>
+    <string name="incoming_transfer_cancel">Cancel transfer</string>
+    <string name="incoming_transfer_canceled">Transfer canceled</string>
+    <string name="incoming_transfer_open_files">Open received file folder</string>
+    <string name="incoming_transfer_unavailable">This transfer is no longer active</string>
 </resources>

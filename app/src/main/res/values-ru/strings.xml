@@ -200,4 +200,13 @@
     <string name="local_files_permission_message">Чтобы просматривать все файлы этого устройства, разрешите DROPME доступ ко всем файлам в настройках Android.</string>
     <string name="local_files_permission_required">DROPME не может показать локальные файлы, пока Android не предоставит файловый доступ.</string>
     <string name="local_files_permission_grant">Предоставить доступ</string>
+    <string name="incoming_transfer_screen_title">Входящая передача</string>
+    <string name="incoming_transfer_sender">От: %1$s</string>
+    <string name="incoming_transfer_percent">Получение: %1$d%%</string>
+    <string name="incoming_transfer_bytes">%1$s / %2$s</string>
+    <string name="incoming_transfer_verifying">Проверка и сохранение файла…</string>
+    <string name="incoming_transfer_cancel">Отменить передачу</string>
+    <string name="incoming_transfer_canceled">Передача отменена</string>
+    <string name="incoming_transfer_open_files">Открыть папку с файлом</string>
+    <string name="incoming_transfer_unavailable">Эта передача больше не активна</string>
 </resources>

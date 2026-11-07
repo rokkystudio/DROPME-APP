@@ -135,6 +135,11 @@ object IncomingApprovalCoordinator {
             }
             context.getSystemService(NotificationManager::class.java)
                 .cancel(APPROVAL_NOTIFICATION_ID)
+            context.sendBroadcast(
+                Intent(ACTION_REQUEST_FINISHED)
+                    .setPackage(context.packageName)
+                    .putExtra(EXTRA_REQUEST_ID, state.request.requestId),
+            )
 
             if (gateTaken) {
                 approvalUiGate.release()
@@ -279,7 +284,8 @@ object IncomingApprovalCoordinator {
             )
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(false)
-            .setOngoing(true)
+            .setDeleteIntent(denyIntent)
+            .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
@@ -305,6 +311,9 @@ object IncomingApprovalCoordinator {
             },
         )
     }
+
+    const val ACTION_REQUEST_FINISHED = "com.rokkystudio.dropme.action.APPROVAL_REQUEST_FINISHED"
+    const val EXTRA_REQUEST_ID = "request_id"
 
     private const val APPROVAL_TIMEOUT_SECONDS = 60L
     private const val APPROVAL_QUEUE_WAIT_SECONDS = 2L

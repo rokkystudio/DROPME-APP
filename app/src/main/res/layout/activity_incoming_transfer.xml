@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/incomingTransferRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:orientation="vertical">
+
+    <badfox.logic.neoui.NeoTopBarView
+        android:id="@+id/neoTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="80dp" />
+
+    <badfox.logic.neoui.NeoFadingNestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/incomingTransferName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/incomingTransferSender"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/incomingTransferStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp" />
+
+                <ProgressBar
+                    android:id="@+id/incomingTransferProgress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:layout_marginTop="12dp"
+                    android:max="100"
+                    android:progressTint="@color/accent"
+                    android:indeterminateTint="@color/accent" />
+
+                <TextView
+                    android:id="@+id/incomingTransferDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/text_secondary"
+                    android:textIsSelectable="true"
+                    android:textSize="13sp" />
+
+                <badfox.logic.neoui.NeoButtonView
+                    android:id="@+id/incomingTransferCancel"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/bg_button"
+                    android:stateListAnimator="@null"
+                    android:text="@string/incoming_transfer_cancel" />
+
+                <badfox.logic.neoui.NeoButtonView
+                    android:id="@+id/incomingTransferFiles"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/bg_button"
+                    android:stateListAnimator="@null"
+                    android:text="@string/incoming_transfer_open_files"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+    </badfox.logic.neoui.NeoFadingNestedScrollView>
+</LinearLayout>

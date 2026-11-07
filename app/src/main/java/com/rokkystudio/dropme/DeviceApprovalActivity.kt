@@ -1,13 +1,16 @@
 package com.rokkystudio.dropme
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.rokkystudio.dropme.device.IncomingApprovalCoordinator
 
 /**
@@ -15,6 +18,13 @@ import com.rokkystudio.dropme.device.IncomingApprovalCoordinator
  */
 class DeviceApprovalActivity : AppCompatActivity() {
     private var requestId: String = ""
+    private val finishedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.getStringExtra(IncomingApprovalCoordinator.EXTRA_REQUEST_ID) == requestId) {
+                finish()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,6 +87,30 @@ class DeviceApprovalActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    /**
+     * Подписывает диалог на завершение запроса из уведомления или по сетевому таймауту.
+     */
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this,
+            finishedReceiver,
+            IntentFilter(IncomingApprovalCoordinator.ACTION_REQUEST_FINISHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    /**
+     * Освобождает получатель событий при закрытии диалога подтверждения.
+     */
+    override fun onStop() {
+        unregisterReceiver(finishedReceiver)
+        super.onStop()
+    }
+
+    /**
+     * Применяет решение пользователя к ожидающему входящему соединению.
+     */
     private fun resolve(allowed: Boolean, remember: Boolean) {
         IncomingApprovalCoordinator.resolve(
             context = this,
